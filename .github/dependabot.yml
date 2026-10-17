@@ -1,7 +1,45 @@
 version: 2
+
+# One weekly PR per ecosystem instead of one per package: minor and patch updates are
+# grouped, and so are security fixes. Major updates still come one per PR, because they
+# can break things and deserve their own review.
 updates:
   # Keeps the SHA-pinned actions in the workflows up to date
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    groups:
+      npm-minor-and-patch:
+        update-types: [minor, patch]
+      npm-security:
+        applies-to: security-updates
+        patterns: ["*"]
+
+  - package-ecosystem: maven
+    directory: /backend
+    schedule:
+      interval: weekly
+    groups:
+      maven-minor-and-patch:
+        update-types: [minor, patch]
+      maven-security:
+        applies-to: security-updates
+        patterns: ["*"]
+
+  # Base images of both Dockerfiles
+  - package-ecosystem: docker
+    directories: [/backend, /frontend]
+    schedule:
+      interval: weekly
+    groups:
+      docker-minor-and-patch:
+        update-types: [minor, patch]

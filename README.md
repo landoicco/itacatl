@@ -83,7 +83,7 @@ flowchart LR
 - **Real database in tests:** integration tests run against PostgreSQL in Testcontainers, which also validates every Flyway migration.
 - **One image, every environment:** Spring profiles `local` and `aws` change configuration only; the `aws` profile logs ECS JSON for CloudWatch.
 - **Hardened containers:** non-root users and memory budgets sized for a 2 GiB instance.
-- **Guarded `main`:** CI (format, lint, tests, image builds) is required by a ruleset; actions are pinned to commit SHAs and kept current by Dependabot.
+- **Guarded `main`:** CI (format, lint, tests, image builds) is required by a ruleset; actions are pinned to commit SHAs, and Dependabot sends grouped weekly updates for actions, npm, Maven and Docker images.
 - **Reproducible toolchain:** JDK, Maven and Node are pinned in a Nix flake.
 
 The checkout, step by step:

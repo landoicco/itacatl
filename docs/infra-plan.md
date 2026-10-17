@@ -100,7 +100,15 @@ Every change reaches `main` through a PR that passed CI.
 | `Frontend` | `npm ci`, Prettier, ESLint, Vitest, build |
 | `Docker images` | Both Dockerfiles build |
 
-The workflow has read-only permissions, actions are pinned to a commit SHA, and Dependabot (`.github/dependabot.yml`) keeps those pins updated.
+The workflow has read-only permissions and actions are pinned to a commit SHA.
+
+**Dependabot** (`.github/dependabot.yml`) checks every week for updates to the GitHub Actions pins, the frontend's npm packages, the backend's Maven dependencies and the base images of both Dockerfiles:
+
+- Minor and patch updates are grouped into one PR per ecosystem, so updates arrive as a few reviewable PRs instead of one per package.
+- Security fixes are grouped the same way, and Dependabot opens them as soon as an advisory is published, without waiting for the weekly run.
+- Major updates come one per PR, because they can break things and deserve their own review.
+
+Every Dependabot PR goes through the same CI and ruleset as any other change.
 
 **Ruleset on `main`** (configured in GitHub under *Settings → Rules → Rulesets*):
 
