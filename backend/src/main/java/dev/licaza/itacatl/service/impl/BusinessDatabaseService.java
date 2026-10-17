@@ -9,6 +9,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -26,6 +27,7 @@ public class BusinessDatabaseService implements BusinessService {
   private final BusinessHoursRepository hoursRepository;
   private final ScheduleExceptionRepository exceptionRepository;
   private final MenuRepository menuRepository;
+  private final MenuItemRepository menuItemRepository;
   private final Clock clock;
 
   public BusinessDatabaseService(
@@ -33,11 +35,13 @@ public class BusinessDatabaseService implements BusinessService {
       BusinessHoursRepository hoursRepository,
       ScheduleExceptionRepository exceptionRepository,
       MenuRepository menuRepository,
+      MenuItemRepository menuItemRepository,
       Clock clock) {
     this.businessRepository = businessRepository;
     this.hoursRepository = hoursRepository;
     this.exceptionRepository = exceptionRepository;
     this.menuRepository = menuRepository;
+    this.menuItemRepository = menuItemRepository;
     this.clock = clock;
   }
 
@@ -45,6 +49,7 @@ public class BusinessDatabaseService implements BusinessService {
   public List<BusinessSummaryDTO> getBusinesses() {
     List<Business> businesses = businessRepository.findAllByOrderByNameAsc();
     Map<Long, WeeklySchedule> schedules = loadSchedules(businesses);
+    Map<Long, List<String>> featuredItems = loadFeaturedItems(businesses);
 
     return businesses.stream()
         .map(
@@ -54,8 +59,65 @@ public class BusinessDatabaseService implements BusinessService {
                     business.getName(),
                     business.getDescription(),
                     business.getTimeZone().getId(),
-                    schedules.get(business.getId()).statusAt(localNow(business))))
+                    schedules.get(business.getId()).statusAt(localNow(business)),
+                    featuredItems.getOrDefault(business.getId(), List.of())))
         .toList();
+  }
+
+  /**
+   * Item names of each business's current or next menu, for every business in two queries: one for
+   * candidate menus and one for their items. Fetching them per business would be N+1.
+   */
+  private Map<Long, List<String>> loadFeaturedItems(List<Business> businesses) {
+    if (businesses.isEmpty()) {
+      return Map.of();
+    }
+    Map<Long, Business> byId =
+        businesses.stream().collect(Collectors.toMap(Business::getId, b -> b));
+
+    // A day of margin on each side covers every time zone's "today"
+    LocalDate utcToday = LocalDate.now(clock);
+    List<Menu> candidates =
+        menuRepository
+            .findByTenantIdInAndStatusAndServiceDateBetweenOrderByServiceDateAscStartsAtAsc(
+                byId.keySet(),
+                MenuStatus.PUBLISHED,
+                utcToday.minusDays(1),
+                utcToday.plusDays(UPCOMING_MENU_DAYS + 1));
+
+    // Candidates come sorted, so the first one still running for a business is its next menu
+    Map<Long, Long> nextMenuByTenant = new HashMap<>();
+    for (Menu menu : candidates) {
+      LocalDateTime now = localNow(byId.get(menu.getTenantId()));
+      if (!nextMenuByTenant.containsKey(menu.getTenantId()) && isUpcoming(menu, now)) {
+        nextMenuByTenant.put(menu.getTenantId(), menu.getId());
+      }
+    }
+    if (nextMenuByTenant.isEmpty()) {
+      return Map.of();
+    }
+
+    Map<Long, List<String>> namesByMenu =
+        menuItemRepository.findByMenuIdInWithItem(nextMenuByTenant.values()).stream()
+            .collect(
+                Collectors.groupingBy(
+                    menuItem -> menuItem.getMenu().getId(),
+                    Collectors.mapping(
+                        menuItem -> menuItem.getItem().getName(), Collectors.toList())));
+
+    Map<Long, List<String>> byTenant = new HashMap<>();
+    nextMenuByTenant.forEach(
+        (tenantId, menuId) -> byTenant.put(tenantId, namesByMenu.getOrDefault(menuId, List.of())));
+    return byTenant;
+  }
+
+  // Same rule as MenuRepository.findUpcoming: not ended yet, and within the next week
+  private static boolean isUpcoming(Menu menu, LocalDateTime now) {
+    LocalDate today = now.toLocalDate();
+    LocalDate date = menu.getServiceDate();
+    boolean notEnded =
+        date.isAfter(today) || (date.equals(today) && menu.getEndsAt().isAfter(now.toLocalTime()));
+    return notEnded && !date.isAfter(today.plusDays(UPCOMING_MENU_DAYS));
   }
 
   @Override

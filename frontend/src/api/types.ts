@@ -12,12 +12,17 @@ export interface OpeningStatus {
   opensAt: string | null;
 }
 
-export interface BusinessSummary {
+interface BusinessBase {
   slug: string;
   name: string;
   description: string | null;
   timeZone: string;
   openingStatus: OpeningStatus;
+}
+
+export interface BusinessSummary extends BusinessBase {
+  /** Item names of the current or next menu, sorted; empty when there is none */
+  featuredItems: string[];
 }
 
 export interface BusinessHours {
@@ -33,7 +38,7 @@ export interface MenuSummary {
   endsAt: string;
 }
 
-export interface BusinessDetail extends BusinessSummary {
+export interface BusinessDetail extends BusinessBase {
   acceptsPickup: boolean;
   acceptsDineIn: boolean;
   weeklyHours: BusinessHours[];
