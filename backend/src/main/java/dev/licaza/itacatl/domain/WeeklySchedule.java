@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
 public class WeeklySchedule {
 
   // How far ahead to look for the next opening before calling a business closed indefinitely
-  static final int HORIZON_DAYS = 14;
+  public static final int HORIZON_DAYS = 14;
 
   private final Map<DayOfWeek, List<TimeWindow>> weekly;
   private final Map<LocalDate, ScheduleException> exceptions;
