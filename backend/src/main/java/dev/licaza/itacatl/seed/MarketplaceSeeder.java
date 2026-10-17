@@ -144,7 +144,7 @@ public class MarketplaceSeeder {
     item.setName(seed.name());
     item.setDescription(seed.description());
     item.setSuggestedPrice(seed.price());
-    item.setAlcoholic(seed.alcoholic());
+    item.setAlcoholic(Boolean.TRUE.equals(seed.alcoholic()));
     return item;
   }
 

@@ -26,9 +26,11 @@ public record SeedFile(List<SeedBusiness> businesses) {
 
   /**
    * @param key identifies the item inside the file, so menus can reference it in any language
+   * @param alcoholic optional, false when omitted. A wrapper type on purpose: Jackson 3 rejects a
+   *     missing value for a primitive, which keeps required numbers like quantity strict
    */
   public record SeedItem(
-      String key, String name, String description, BigDecimal price, boolean alcoholic) {}
+      String key, String name, String description, BigDecimal price, Boolean alcoholic) {}
 
   /**
    * A menu for the business's first opening window on today + {@code dayOffset}. Skipped if the
