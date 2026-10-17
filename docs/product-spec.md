@@ -4,11 +4,11 @@
 
 ## Vision
 
-An e-commerce platform for small Mexican businesses whose menu changes over time and whose stock runs out: *fondas* with a daily *comida corrida*, *neverías* with seasonal flavors, *pulquerías* with the *curados* of the day, a barbacoa stand that only opens on Sundays. Businesses publish their menu; customers find what they want, reserve it before it sells out, pay, and pick it up.
+An e-commerce platform for small Mexican businesses whose menu changes over time and whose stock runs out: *fondas* (family eateries) with a daily *comida corrida* (set lunch), *neverías* (ice cream shops) with seasonal flavors, *pulquerías* with the *curados* (flavored pulque) of the day, a barbacoa stand that only opens on Sundays. Businesses publish their menu; customers find what they want, reserve it before it sells out, pay, and pick it up.
 
 It works like a regular e-commerce. What makes it different is that menus are **dynamic**: they are valid for a specific service window and have limited stock.
 
-**One deploy is one marketplace for one vertical** (fondas, neverías, pulquerías…), with many businesses inside. The vertical is configuration (branding, texts, categories, seed data), not code. The first vertical is neverías: ice cream is understood everywhere, and a mix of fixed and rotating flavors shows what dynamic menus are for.
+**One deploy is one marketplace for one vertical** (fondas, neverías, pulquerías…), with many businesses inside. The vertical is configuration (branding, texts, categories, seed data), not code. The first vertical is ice cream shops (*neverías*): ice cream is understood everywhere, and a mix of fixed and rotating flavors shows what dynamic menus are for.
 
 The project has three goals:
 
@@ -43,13 +43,13 @@ Every feature must make one of these steps better. Anything else goes to [Later]
 - **A menu belongs to a service:** it is published for a specific date and time window, not just for "today". Customers can reserve in advance (e.g. Saturday for Sunday's barbacoa), from a per-business opening time for reservations.
 - **Catalog, menu and offer:** three levels, the classic catalog → offer → sale pattern.
 
-  | Level | What it is | Example (nevería) |
+  | Level | What it is | Example (ice cream shop) |
   |---|---|---|
-  | **Item** | What the business knows how to make: name, description, suggested price, alcohol flag. Created once | *Nieve de maracuyá*, suggested $45 |
+  | **Item** | What the business knows how to make: name, description, suggested price, alcohol flag. Created once | Passion fruit sorbet, suggested $45 |
   | **Menu** | What is sold in one service: a date and a time window | Saturday 25, 12:00–20:00 |
-  | **Menu item** | A catalog item offered in a menu, with its own price and limited stock | Maracuyá, $45, 30 scoops today |
+  | **Menu item** | A catalog item offered in a menu, with its own price and limited stock | Passion fruit, $45, 30 scoops today |
 
-  A nevería with two fixed flavors and three rotating ones duplicates yesterday's menu and picks today's flavors from its catalog; the maracuyá that comes back every two weeks is already there.
+  A shop with two fixed flavors and three rotating ones duplicates yesterday's menu and picks today's flavors from its catalog; the passion fruit sorbet that comes back every two weeks is already there. How this is modeled: [domain model](domain-model.md).
 - **Prices:** the item's price is only a suggestion, prefilled when it is added to a menu and adjustable for that day. Changing it never alters published menus.
 - **Items are archived, never deleted,** so past menus and orders keep their meaning.
 - A *comida corrida* combo (soup, rice or pasta, main dish, dessert, drink of the day) is one item with its courses listed, not a special menu structure.
@@ -143,7 +143,7 @@ Code, API, logs and docs are in English; deployments serve their users in their 
 
 ## Sample data
 
-`docker compose up` seeds sample neverías with their catalogs and menus, so the whole flow can be tried locally. Item names and descriptions are in Spanish, because they are business content, not UI text.
+`docker compose up` seeds sample ice cream shops with their catalogs and menus, so the whole flow can be tried locally. The seed file is a deployment setting, like the UI's default locale: English by default, so anyone can read the demo, and a Spanish (`es-MX`) file for a Mexican deployment. Business content is stored as written, not machine-translated.
 
 ## Rework roadmap
 
@@ -151,8 +151,8 @@ The rework from the product catalog to this marketplace is built in vertical sli
 
 | # | Slice | Scope | Visible result |
 |---|---|---|---|
-| 1a | Domain model and read API | New migration that drops `products` and `orders` and creates the business, schedule, item, menu and menu item tables with `tenant_id`. Entities, repositories, services and a public read API (businesses, open and upcoming menus). Nevería seed data. Product code removed | API covered by integration tests |
-| 1b | Customer UI and redesign | Agreed visual style, then a mobile-first UI: neverías, today's menu, "opens tomorrow at 12:00" when closed. The generic catalog UI is removed | Product screenshots in the README |
+| 1a | Domain model and read API | Marketplace schema as a squashed `V1` ([ADR 0003](adr/0003-squash-migrations-before-first-deploy.md)) with composite tenant foreign keys; the product catalog stays in a temporary `V2` so the current UI keeps working. Entities, services, public read API, ice cream shop seed data ([domain model](domain-model.md)) | API covered by integration tests |
+| 1b | Customer UI and redesign | Agreed visual style, then a mobile-first UI: ice cream shops, today's menu, "opens tomorrow at 12:00" when closed. Removes the product catalog: its UI, its code, the CSV seed and `V2` | Product screenshots in the README |
 | 2 | Owner management and Spring Security | Owner and staff login with sessions in PostgreSQL (Spring Session JDBC) and CSRF. Item catalog (create, edit, archive), menus built by duplicating or picking from the catalog, publishing | Business panel |
 | 3 | Tenant isolation | Hibernate `@TenantId` and PostgreSQL Row-Level Security, with controlled cross-tenant public reads | Tests proving one business cannot see another's data |
 | 4 | Cash reservations | Orders with copied name and price, stock holds, expiry (`@Scheduled`), concurrency, error codes with `ProblemDetail` | The reservation flow |

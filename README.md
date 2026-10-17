@@ -3,7 +3,7 @@
 [![CI](https://github.com/landoicco/itacatl/actions/workflows/ci.yml/badge.svg)](https://github.com/landoicco/itacatl/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-A marketplace where small Mexican food businesses (*fondas*, *neverías*, *pulquerías*) publish dynamic menus with limited stock, and customers reserve food for pickup before it sells out.
+A marketplace where small Mexican food businesses (family eateries, ice cream shops, *pulquerías*) publish dynamic menus with limited stock, and customers reserve food for pickup before it sells out.
 
 > *Itacatl* is Nahuatl for the food you carry for the road, the root of the Mexican Spanish *itacate*.
 
@@ -11,14 +11,15 @@ A marketplace where small Mexican food businesses (*fondas*, *neverías*, *pulqu
 
 This is a work in progress, built in the open.
 
-- **Today:** a product catalog with CRUD and a transactional checkout, running locally with Docker Compose and covered by CI.
+- **Today:** the marketplace's domain model and public read API (ice cream shops, their schedules and menus), next to the original product catalog with CRUD and a transactional checkout that the current UI still uses. Runs locally with Docker Compose and is covered by CI.
 - **In progress:** the rework into the multi-tenant marketplace described in the [product spec](docs/product-spec.md), and the AWS infrastructure in Terraform described in the [infra plan](docs/infra-plan.md).
 
 | Milestone | State |
 |---|---|
 | PostgreSQL, CI, ruleset on `main`, hardened containers | ✅ Done |
 | Internationalization foundation (`en`, `es-MX`) | ✅ Done |
-| Marketplace domain: businesses, menus, reservations ([roadmap](docs/product-spec.md#rework-roadmap)) | 🚧 Next |
+| Marketplace domain model and read API | ✅ Done |
+| Customer UI and redesign, then owners, tenancy and reservations ([roadmap](docs/product-spec.md#rework-roadmap)) | 🚧 Next |
 | Terraform: bootstrap, modules, CI/CD | 📋 Planned |
 | Ephemeral AWS deploy with load test and recovery evidence | 📋 Planned |
 
@@ -33,7 +34,7 @@ flowchart LR
     pay --> pickup[Pick up<br/>or eat on site]
 ```
 
-What makes it different from a generic store is that menus are **dynamic**: they belong to a service window and run out. One deployment is one marketplace for one vertical (fondas, neverías…), and the vertical is configuration, not code.
+What makes it different from a generic store is that menus are **dynamic**: they belong to a service window and run out. One deployment is one marketplace for one vertical (ice cream shops first), and the vertical is configuration, not code.
 
 ## Built for translation
 
@@ -43,7 +44,8 @@ The codebase is in English; the first deployment serves Mexican users in Spanish
 - Translation keys are type-checked against the English catalog, so a typo fails the build; a test fails CI when another locale is missing a key or a placeholder.
 - Prices and units go through `Intl` formatters, never string concatenation.
 - The default language is set per deployment with `VITE_DEFAULT_LOCALE` (`en` when unset); users can switch, and the choice is remembered.
-- The API will return stable error codes instead of sentences, so the client translates them (with the new orders API).
+- The API returns stable error codes instead of sentences ([RFC 9457 Problem Details](docs/domain-model.md#errors)), and dates as data, so the client words them in the user's language.
+- Sample data is in English by default and in Spanish for a Mexican deployment, chosen per deployment like the UI's language.
 
 How it works and how to extend it: [i18n guide](docs/i18n.md).
 
@@ -79,6 +81,8 @@ flowchart LR
 
 ## Engineering highlights
 
+- **Tenant integrity in the schema:** composite foreign keys `(id, tenant_id)` make PostgreSQL reject any row that mixes two businesses, whatever the code does.
+- **Deterministic time:** schedules are local times plus a zone ID, and "now" comes from an injected `Clock`, so opening hours are tested at a frozen moment.
 - **Concurrency-safe checkout:** optimistic locking (`@Version`) keeps concurrent purchases from pushing stock below zero.
 - **Real database in tests:** integration tests run against PostgreSQL in Testcontainers, which also validates every Flyway migration.
 - **One image, every environment:** Spring profiles `local` and `aws` change configuration only; the `aws` profile logs ECS JSON for CloudWatch.
@@ -125,7 +129,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Compose starts the database, then the backend, then the frontend, each waiting for the previous one to be healthy. The app runs at `http://localhost:3000` and the API at `http://localhost:8080`. At startup the backend seeds the catalog from `backend/src/main/resources/products.csv`.
+Compose starts the database, then the backend, then the frontend, each waiting for the previous one to be healthy. The app runs at `http://localhost:3000` and the API at `http://localhost:8080`. At startup the backend seeds three sample ice cream shops with today's and tomorrow's menus (`backend/src/main/resources/seed/`), and the legacy product catalog from `products.csv`.
 
 The database has no persistent volume, so data resets when the containers are removed:
 
@@ -134,6 +138,22 @@ docker compose down
 ```
 
 ## API
+
+### Marketplace
+
+Public and read-only; dates and times are local to each business. Details in the [domain model](docs/domain-model.md#public-read-api).
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/businesses` | Every business with whether it is open now, or when it opens next |
+| `GET` | `/api/businesses/{slug}` | Profile, weekly hours and upcoming menus |
+| `GET` | `/api/menus/{id}` | A published menu with its items, prices and availability |
+
+Try it: `curl localhost:8080/api/businesses/sunny-scoops`.
+
+### Legacy product catalog
+
+Used by the current UI until the marketplace UI replaces it.
 
 | Method | Path | Description |
 |---|---|---|
@@ -167,6 +187,7 @@ Every pull request updates the documentation it affects, so `main` and its docs 
 | Document | Contents |
 |---|---|
 | [Product spec](docs/product-spec.md) | Scope, domain rules, order flow, internationalization |
+| [Domain model](docs/domain-model.md) | Tables, tenant integrity, time handling, read API, sample data |
 | [Infra plan](docs/infra-plan.md) | AWS architecture, cost rules, work phases |
 | [i18n guide](docs/i18n.md) | How translations are wired in, safety nets, adding a text or a language |
 | [ADRs](docs/adr/) | Architecture decisions and their trade-offs |
