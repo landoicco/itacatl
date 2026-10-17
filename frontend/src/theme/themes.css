@@ -1,0 +1,115 @@
+/*
+ * Theme tokens. Components only use the semantic utilities generated below (bg-surface,
+ * text-ink, rounded-card, text-display…), never raw colors or fonts, so a theme is a block of
+ * variables selected by <html data-theme="…">. See docs/theming.md.
+ */
+
+/* Pastel: the default for the ice cream shop vertical */
+:root,
+[data-theme="pastel"] {
+  --theme-page: #fff5fa;
+  --theme-surface: #ffffff;
+  --theme-ink: #3b1747;
+  --theme-muted: #6b4a75;
+  --theme-accent: #7a2e8f;
+  --theme-on-accent: #ffffff;
+  --theme-soft: #f3e3f0;
+  --theme-open: #d6f5e3;
+  --theme-on-open: #1d5e3a;
+  --theme-soon: #ffe9c7;
+  --theme-on-soon: #6a3e00;
+  --theme-low: #a3122b;
+
+  --theme-font-display: "Fredoka", ui-rounded, system-ui, sans-serif;
+  --theme-font-body: "Nunito Sans", system-ui, sans-serif;
+  --theme-display-weight: 700;
+
+  --theme-radius-card: 24px;
+  --theme-radius-control: 999px;
+  --theme-border: 0 solid transparent;
+  --theme-shadow-card: 0 4px 16px rgb(122 46 143 / 0.08);
+  --theme-shadow-pressed: none;
+
+  /* Flavor scoops: an item's color is picked from this palette by a hash of its name */
+  --theme-scoop-0: #ffc8dd;
+  --theme-scoop-1: #c8e6a0;
+  --theme-scoop-2: #ffb86b;
+  --theme-scoop-3: #b8d8f8;
+  --theme-scoop-4: #f6d365;
+  --theme-scoop-5: #d7b9f0;
+  --theme-scoop-6: #a8e6cf;
+  --theme-scoop-7: #f4a3a8;
+}
+
+/* Market: papel picado colors and hand-painted sign shadows */
+[data-theme="market"] {
+  --theme-page: #fff7ec;
+  --theme-surface: #ffffff;
+  --theme-ink: #23160f;
+  --theme-muted: #5b4a3f;
+  --theme-accent: #c2185b;
+  --theme-on-accent: #ffffff;
+  --theme-soft: #ffe3a3;
+  --theme-open: #00796b;
+  --theme-on-open: #ffffff;
+  --theme-soon: #ffe3a3;
+  --theme-on-soon: #23160f;
+  --theme-low: #b3261e;
+
+  --theme-font-display: "Bricolage Grotesque", system-ui, sans-serif;
+  --theme-font-body: "Work Sans", system-ui, sans-serif;
+  --theme-display-weight: 800;
+
+  --theme-radius-card: 16px;
+  --theme-radius-control: 12px;
+  --theme-border: 2px solid #23160f;
+  --theme-shadow-card: 4px 4px 0 #23160f;
+  --theme-shadow-pressed: 3px 3px 0 #23160f;
+
+  --theme-scoop-0: #c2185b;
+  --theme-scoop-1: #f4a300;
+  --theme-scoop-2: #00796b;
+  --theme-scoop-3: #6a1b9a;
+  --theme-scoop-4: #e65100;
+  --theme-scoop-5: #2e7d32;
+  --theme-scoop-6: #1565c0;
+  --theme-scoop-7: #ad1457;
+}
+
+/* "inline" makes each utility reference the variable itself, so switching data-theme at runtime
+   restyles everything without rebuilding the CSS */
+@theme inline {
+  --color-page: var(--theme-page);
+  --color-surface: var(--theme-surface);
+  --color-ink: var(--theme-ink);
+  --color-muted: var(--theme-muted);
+  --color-accent: var(--theme-accent);
+  --color-on-accent: var(--theme-on-accent);
+  --color-soft: var(--theme-soft);
+  --color-open: var(--theme-open);
+  --color-on-open: var(--theme-on-open);
+  --color-soon: var(--theme-soon);
+  --color-on-soon: var(--theme-on-soon);
+  --color-low: var(--theme-low);
+
+  --font-display: var(--theme-font-display);
+  --font-body: var(--theme-font-body);
+
+  --radius-card: var(--theme-radius-card);
+  --radius-control: var(--theme-radius-control);
+
+  --shadow-card: var(--theme-shadow-card);
+  --shadow-pressed: var(--theme-shadow-pressed);
+}
+
+/* Headings: family, weight and tracking change together per theme */
+@utility text-display {
+  font-family: var(--theme-font-display);
+  font-weight: var(--theme-display-weight);
+  letter-spacing: -0.01em;
+}
+
+/* Some themes outline their surfaces, others rely on shadows only */
+@utility border-theme {
+  border: var(--theme-border);
+}

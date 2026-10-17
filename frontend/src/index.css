@@ -1,1 +1,8 @@
 @import "tailwindcss";
+@import "./theme/themes.css";
+
+@layer base {
+  body {
+    @apply bg-page font-body text-ink antialiased;
+  }
+}
