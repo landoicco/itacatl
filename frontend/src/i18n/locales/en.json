@@ -1,69 +1,59 @@
 {
   "header": {
-    "title": "Inventory Terminal",
-    "subtitle": "Technical catalog management",
-    "searchPlaceholder": "Filter by name, SKU or category...",
-    "addItem": "Add Item",
     "language": "Language"
   },
-  "catalog": {
-    "loadError": "Could not load the catalog. Try again later.",
-    "empty": "No items match your criteria.",
-    "previous": "← Previous",
-    "next": "Next →",
-    "page": "Page {{page}}"
+  "home": {
+    "title": "Pick a scoop, we'll save it for you",
+    "subtitle": "Today's flavors from ice cream shops near you.",
+    "searchLabel": "Search flavors or shops",
+    "filters": "Show",
+    "filterOpenNow": "Open now",
+    "filterAll": "All shops",
+    "empty": "No shops match your search.",
+    "flavorsToday_one": "{{count}} flavor today",
+    "flavorsToday_other": "{{count}} flavors today"
   },
-  "productCard": {
-    "defaultCategory": "General",
-    "stock": "Stock:",
-    "units_one": "{{count}} unit",
-    "units_other": "{{count}} units",
-    "outOfStock": "Out of stock",
-    "weight": "Weight:",
-    "edit": "Edit",
-    "delete": "Delete",
-    "buy": "Buy",
-    "soldOut": "Sold Out"
+  "status": {
+    "openUntil_one": "Open until {{time}}",
+    "openUntil_other": "Open until {{time}}",
+    "opensToday_one": "Opens at {{time}}",
+    "opensToday_other": "Opens at {{time}}",
+    "opensTomorrow_one": "Opens tomorrow at {{time}}",
+    "opensTomorrow_other": "Opens tomorrow at {{time}}",
+    "opensOn_one": "Opens {{day}} at {{time}}",
+    "opensOn_other": "Opens {{day}} at {{time}}",
+    "closed": "Closed for now"
   },
-  "productForm": {
-    "editTitle": "Modify {{sku}}",
-    "createTitle": "New Database Record",
-    "close": "Close",
-    "name": "Item Name",
-    "sku": "SKU",
-    "category": "Category",
-    "description": "Description",
-    "price": "Price",
-    "stock": "Stock",
-    "weight": "Weight (kg)",
-    "save": "Save Changes",
-    "create": "Create Record"
+  "shop": {
+    "back": "All shops",
+    "pickup": "Pickup",
+    "dineIn": "Dine-in",
+    "hours": "Opening hours",
+    "closedDay": "Closed",
+    "serviceDays": "Service day",
+    "today": "Today",
+    "tomorrow": "Tomorrow",
+    "served": "Served {{from}} – {{to}}",
+    "flavors": "Flavors",
+    "noMenus": "No menus published yet. Check back soon."
   },
-  "buyModal": {
-    "sku": "SKU: {{sku}}",
-    "close": "Close",
-    "quantity": "Quantity:",
-    "decrease": "Decrease quantity",
-    "increase": "Increase quantity",
-    "total": "Total:",
-    "cancel": "Cancel",
-    "confirm": "Confirm Buy"
+  "menu": {
+    "left_one": "{{count}} left",
+    "left_other": "{{count}} left",
+    "lowStock_one": "Only {{count}} left",
+    "lowStock_other": "Only {{count}} left",
+    "soldOut": "Sold out",
+    "alcohol": "Contains alcohol"
   },
-  "purchase": {
-    "title": "YOUR PURCHASE STATUS",
-    "status": "Status",
-    "total": "Total to pay",
-    "message": "Message",
-    "backendSays": "SERVER RESPONSE",
-    "orderStatus": {
-      "PENDING": "Pending",
-      "PAID": "Paid",
-      "FAILED": "Failed"
-    }
+  "apiErrors": {
+    "BUSINESS_NOT_FOUND": "This shop does not exist.",
+    "MENU_NOT_FOUND": "This menu is no longer available.",
+    "NETWORK_ERROR": "Can't reach the server. Check your connection.",
+    "UNKNOWN_ERROR": "Something went wrong.",
+    "retry": "Try again"
   },
-  "errors": {
-    "saveProduct": "Error saving product",
-    "updateProduct": "Error updating product",
-    "deleteProduct": "Could not delete the product"
+  "notFound": {
+    "title": "Page not found",
+    "home": "Go to the home page"
   }
 }

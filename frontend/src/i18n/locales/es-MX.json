@@ -1,69 +1,59 @@
 {
   "header": {
-    "title": "Terminal de inventario",
-    "subtitle": "Gestión técnica del catálogo",
-    "searchPlaceholder": "Filtrar por nombre, SKU o categoría...",
-    "addItem": "Agregar artículo",
     "language": "Idioma"
   },
-  "catalog": {
-    "loadError": "No se pudo cargar el catálogo. Intenta más tarde.",
-    "empty": "Ningún artículo coincide con tu búsqueda.",
-    "previous": "← Anterior",
-    "next": "Siguiente →",
-    "page": "Página {{page}}"
+  "home": {
+    "title": "Elige tu nieve, te la apartamos",
+    "subtitle": "Los sabores de hoy en las neverías cerca de ti.",
+    "searchLabel": "Busca sabores o neverías",
+    "filters": "Mostrar",
+    "filterOpenNow": "Abiertas ahora",
+    "filterAll": "Todas",
+    "empty": "Ninguna nevería coincide con tu búsqueda.",
+    "flavorsToday_one": "{{count}} sabor hoy",
+    "flavorsToday_other": "{{count}} sabores hoy"
   },
-  "productCard": {
-    "defaultCategory": "General",
-    "stock": "Existencias:",
-    "units_one": "{{count}} unidad",
-    "units_other": "{{count}} unidades",
-    "outOfStock": "Agotado",
-    "weight": "Peso:",
-    "edit": "Editar",
-    "delete": "Eliminar",
-    "buy": "Comprar",
-    "soldOut": "Agotado"
+  "status": {
+    "openUntil_one": "Abierto hasta la {{time}}",
+    "openUntil_other": "Abierto hasta las {{time}}",
+    "opensToday_one": "Abre a la {{time}}",
+    "opensToday_other": "Abre a las {{time}}",
+    "opensTomorrow_one": "Abre mañana a la {{time}}",
+    "opensTomorrow_other": "Abre mañana a las {{time}}",
+    "opensOn_one": "Abre el {{day}} a la {{time}}",
+    "opensOn_other": "Abre el {{day}} a las {{time}}",
+    "closed": "Cerrado por ahora"
   },
-  "productForm": {
-    "editTitle": "Modificar {{sku}}",
-    "createTitle": "Nuevo registro",
-    "close": "Cerrar",
-    "name": "Nombre del artículo",
-    "sku": "SKU",
-    "category": "Categoría",
-    "description": "Descripción",
-    "price": "Precio",
-    "stock": "Existencias",
-    "weight": "Peso (kg)",
-    "save": "Guardar cambios",
-    "create": "Crear registro"
+  "shop": {
+    "back": "Todas las neverías",
+    "pickup": "Para llevar",
+    "dineIn": "Comer ahí",
+    "hours": "Horario",
+    "closedDay": "Cerrado",
+    "serviceDays": "Día de servicio",
+    "today": "Hoy",
+    "tomorrow": "Mañana",
+    "served": "Servicio de {{from}} a {{to}}",
+    "flavors": "Sabores",
+    "noMenus": "Aún no hay menús publicados. Vuelve pronto."
   },
-  "buyModal": {
-    "sku": "SKU: {{sku}}",
-    "close": "Cerrar",
-    "quantity": "Cantidad:",
-    "decrease": "Disminuir cantidad",
-    "increase": "Aumentar cantidad",
-    "total": "Total:",
-    "cancel": "Cancelar",
-    "confirm": "Confirmar compra"
+  "menu": {
+    "left_one": "Queda {{count}}",
+    "left_other": "Quedan {{count}}",
+    "lowStock_one": "¡Solo queda {{count}}!",
+    "lowStock_other": "¡Solo quedan {{count}}!",
+    "soldOut": "Agotado",
+    "alcohol": "Contiene alcohol"
   },
-  "purchase": {
-    "title": "ESTADO DE TU COMPRA",
-    "status": "Estado",
-    "total": "Total a pagar",
-    "message": "Mensaje",
-    "backendSays": "RESPUESTA DEL SERVIDOR",
-    "orderStatus": {
-      "PENDING": "Pendiente",
-      "PAID": "Pagada",
-      "FAILED": "Fallida"
-    }
+  "apiErrors": {
+    "BUSINESS_NOT_FOUND": "Esta nevería no existe.",
+    "MENU_NOT_FOUND": "Este menú ya no está disponible.",
+    "NETWORK_ERROR": "No hay conexión con el servidor. Revisa tu internet.",
+    "UNKNOWN_ERROR": "Algo salió mal.",
+    "retry": "Reintentar"
   },
-  "errors": {
-    "saveProduct": "Error al guardar el artículo",
-    "updateProduct": "Error al actualizar el artículo",
-    "deleteProduct": "No se pudo eliminar el artículo"
+  "notFound": {
+    "title": "Página no encontrada",
+    "home": "Ir al inicio"
   }
 }

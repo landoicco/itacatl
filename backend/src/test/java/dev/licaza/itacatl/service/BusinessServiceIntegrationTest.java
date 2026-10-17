@@ -33,6 +33,8 @@ class BusinessServiceIntegrationTest {
   @Autowired private BusinessRepository businessRepository;
   @Autowired private BusinessHoursRepository hoursRepository;
   @Autowired private MenuRepository menuRepository;
+  @Autowired private ItemRepository itemRepository;
+  @Autowired private MenuItemRepository menuItemRepository;
 
   private Business sunny;
 
@@ -65,6 +67,29 @@ class BusinessServiceIntegrationTest {
     OpeningStatus sunnyStatus = businesses.get(1).openingStatus();
     assertEquals(OpeningStatus.State.CLOSED, sunnyStatus.state());
     assertEquals(TODAY.atTime(12, 0), sunnyStatus.opensAt());
+  }
+
+  @Test
+  void getBusinesses_FeaturesTheItemsOfEachBusinesssNextMenu() {
+    Item lime = itemRepository.save(item(sunny, "Lime sorbet", "40.00"));
+    Item mango = itemRepository.save(item(sunny, "Mango sorbet", "45.00"));
+    Item coconut = itemRepository.save(item(sunny, "Coconut ice cream", "45.00"));
+
+    // Ended at 11:00, so the featured menu is the one starting at noon, not tomorrow's
+    Menu morning = menuRepository.save(menu(sunny, TODAY, "08:00", "11:00", MenuStatus.PUBLISHED));
+    Menu noon = menuRepository.save(menu(sunny, TODAY, "12:00", "20:00", MenuStatus.PUBLISHED));
+    Menu tomorrow =
+        menuRepository.save(menu(sunny, TODAY.plusDays(1), "12:00", "20:00", MenuStatus.PUBLISHED));
+    menuItemRepository.save(menuItem(morning, coconut, "45.00", 10));
+    menuItemRepository.save(menuItem(noon, mango, "45.00", 10));
+    menuItemRepository.save(menuItem(noon, lime, "40.00", 10));
+    menuItemRepository.save(menuItem(tomorrow, coconut, "45.00", 10));
+
+    List<BusinessSummaryDTO> businesses = businessService.getBusinesses();
+
+    // Cold Corner has no menu; Sunny's items come sorted by name
+    assertEquals(List.of(), businesses.get(0).featuredItems());
+    assertEquals(List.of("Lime sorbet", "Mango sorbet"), businesses.get(1).featuredItems());
   }
 
   @Test

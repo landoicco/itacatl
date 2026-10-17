@@ -4,6 +4,7 @@ import dev.licaza.itacatl.domain.Menu;
 import dev.licaza.itacatl.domain.MenuStatus;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -26,4 +27,9 @@ public interface MenuRepository extends JpaRepository<Menu, Long> {
       Long tenantId, MenuStatus status, LocalDate today, LocalTime now, LocalDate until);
 
   Optional<Menu> findByIdAndStatus(Long id, MenuStatus status);
+
+  // Candidates for many businesses at once; each business's own "not ended yet" filter runs in
+  // its local time in the service, since one SQL "now" cannot fit every time zone
+  List<Menu> findByTenantIdInAndStatusAndServiceDateBetweenOrderByServiceDateAscStartsAtAsc(
+      Collection<Long> tenantIds, MenuStatus status, LocalDate from, LocalDate to);
 }

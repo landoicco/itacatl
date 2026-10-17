@@ -1,31 +1,60 @@
-# itacatl
+<p align="center">
+  <img src="docs/images/banner.svg" alt="itacatl: dynamic menus for small food businesses. An ice cream shop, a family eatery and a bakery publish today's menu with limited stock, each in its own theme." width="100%">
+</p>
 
-[![CI](https://github.com/landoicco/itacatl/actions/workflows/ci.yml/badge.svg)](https://github.com/landoicco/itacatl/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+<p align="center">
+  <a href="https://github.com/landoicco/itacatl/actions/workflows/ci.yml"><img src="https://github.com/landoicco/itacatl/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+</p>
 
-A marketplace where small Mexican food businesses (family eateries, ice cream shops, *pulquerías*) publish dynamic menus with limited stock, and customers reserve food for pickup before it sells out.
+**itacatl** is a marketplace where small food businesses publish **dynamic menus**: what they sell today, in a service window, with limited stock. Customers find what they want, reserve it before it sells out, and pick it up.
+
+It is built for the way small Mexican businesses work (a *fonda*'s lunch of the day, an ice cream shop's rotating flavors, a bakery's seasonal bread), and every kind of business is configuration, not code.
 
 > *Itacatl* is Nahuatl for the food you carry for the road, the root of the Mexican Spanish *itacate*.
 
+## One platform, many verticals
+
+One deployment is one marketplace for one kind of business; the demo is ice cream shops. A vertical is a theme, sample data, copy and a default language, so a new one needs no new screens ([theming guide](docs/theming.md)).
+
+| Vertical | What its menu looks like | State |
+|---|---|---|
+| Ice cream shops (*neverías*) | Fixed flavors plus rotating ones, scoops in stock | ✅ Demo, `pastel` theme |
+| Family eateries (*fondas*) | The *comida corrida* (set lunch) of the day | 🎨 `market` theme ready |
+| Bakeries, coffee shops, *pulquerías*… | Bread of the day, seasonal specials, *curados* | 📋 Same model, a theme and a seed away |
+
 ## Status
 
-This is a work in progress, built in the open.
-
-- **Today:** the marketplace's domain model and public read API (ice cream shops, their schedules and menus), next to the original product catalog with CRUD and a transactional checkout that the current UI still uses. Runs locally with Docker Compose and is covered by CI.
-- **In progress:** the rework into the multi-tenant marketplace described in the [product spec](docs/product-spec.md), and the AWS infrastructure in Terraform described in the [infra plan](docs/infra-plan.md).
+A work in progress, built in the open.
 
 | Milestone | State |
 |---|---|
 | PostgreSQL, CI, ruleset on `main`, hardened containers | ✅ Done |
-| Internationalization foundation (`en`, `es-MX`) | ✅ Done |
+| Internationalization (`en`, `es-MX`) | ✅ Done |
 | Marketplace domain model and read API | ✅ Done |
-| Customer UI and redesign, then owners, tenancy and reservations ([roadmap](docs/product-spec.md#rework-roadmap)) | 🚧 Next |
+| Customer UI: themes, phone and desktop layouts | ✅ Done |
+| Owners, tenant isolation, reservations and payments ([roadmap](docs/product-spec.md#rework-roadmap)) | 🚧 Next |
 | Terraform: bootstrap, modules, CI/CD | 📋 Planned |
 | Ephemeral AWS deploy with load test and recovery evidence | 📋 Planned |
 
-## Product
+## Try it
 
-Businesses publish a menu for a specific service (a date and a time window) with limited stock per item. Customers follow one flow:
+Requires Docker with Compose v2.
+
+```shell
+cp .env.example .env
+docker compose up --build
+```
+
+Open `http://localhost:3000`. The backend seeds three sample ice cream shops with today's and tomorrow's menus, so there is always something open or about to open. The API runs at `http://localhost:8080`:
+
+```shell
+curl -s localhost:8080/api/businesses | jq
+```
+
+The database has no persistent volume, so data resets with `docker compose down`.
+
+## Product
 
 ```mermaid
 flowchart LR
@@ -34,20 +63,18 @@ flowchart LR
     pay --> pickup[Pick up<br/>or eat on site]
 ```
 
-What makes it different from a generic store is that menus are **dynamic**: they belong to a service window and run out. One deployment is one marketplace for one vertical (ice cream shops first), and the vertical is configuration, not code.
+What makes it different from a generic store is that menus are **dynamic**: they belong to a service window and run out. Businesses keep a catalog of what they know how to make and publish a menu per service, with that day's price and stock ([domain model](docs/domain-model.md)).
 
 ## Built for translation
 
 The codebase is in English; the first deployment serves Mexican users in Spanish. Internationalization is a design rule, not an afterthought:
 
-- No hardcoded UI text: every string lives in a per-locale catalog (`en`, `es-MX`) in `frontend/src/i18n/locales/`.
-- Translation keys are type-checked against the English catalog, so a typo fails the build; a test fails CI when another locale is missing a key or a placeholder.
-- Prices and units go through `Intl` formatters, never string concatenation.
-- The default language is set per deployment with `VITE_DEFAULT_LOCALE` (`en` when unset); users can switch, and the choice is remembered.
-- The API returns stable error codes instead of sentences ([RFC 9457 Problem Details](docs/domain-model.md#errors)), and dates as data, so the client words them in the user's language.
-- Sample data is in English by default and in Spanish for a Mexican deployment, chosen per deployment like the UI's language.
+- No hardcoded UI text: every string lives in a per-locale catalog, type-checked against English, and CI fails when a translation is missing.
+- The API returns stable error codes ([RFC 9457 Problem Details](docs/domain-model.md#errors)) and local dates as data, so the client words them in the user's language.
+- Prices, dates and times go through `Intl`, in each business's own time zone.
+- Language, theme and sample data are chosen per deployment.
 
-How it works and how to extend it: [i18n guide](docs/i18n.md).
+How it works: [i18n guide](docs/i18n.md).
 
 ## Architecture
 
@@ -79,92 +106,46 @@ flowchart LR
     ec2 --> sqs[SQS] --> lambda[Lambda] --> wa([WhatsApp Cloud API])
 ```
 
+Layers, patterns and the rules that keep them: [architecture guide](docs/architecture.md).
+
 ## Engineering highlights
 
+**Backend**
 - **Tenant integrity in the schema:** composite foreign keys `(id, tenant_id)` make PostgreSQL reject any row that mixes two businesses, whatever the code does.
 - **Deterministic time:** schedules are local times plus a zone ID, and "now" comes from an injected `Clock`, so opening hours are tested at a frozen moment.
-- **Concurrency-safe checkout:** optimistic locking (`@Version`) keeps concurrent purchases from pushing stock below zero.
+- **No N+1:** the shop list loads every shop's hours and next menu in a fixed number of queries.
 - **Real database in tests:** integration tests run against PostgreSQL in Testcontainers, which also validates every Flyway migration.
-- **One image, every environment:** Spring profiles `local` and `aws` change configuration only; the `aws` profile logs ECS JSON for CloudWatch.
-- **Hardened containers:** non-root users and memory budgets sized for a 2 GiB instance.
-- **Guarded `main`:** CI (format, lint, tests, image builds) is required by a ruleset; actions are pinned to commit SHAs, and Dependabot sends grouped weekly updates for actions, npm, Maven and Docker images.
+
+**Frontend**
+- **Themes as design tokens:** components only use semantic utilities (`bg-surface`, `rounded-card`), so a vertical's identity is a block of CSS variables ([theming](docs/theming.md)).
+- **Enforced architecture:** package-by-feature, with ESLint failing CI if one feature imports another.
+- **Server state done right:** TanStack Query for API data, a typed client that turns Problem Details into translated error codes.
+- **Tests through the network:** pages are tested on the real routes with the API faked by MSW, and the clock frozen.
+
+**Delivery**
+- **One image, every environment:** Spring profiles change configuration only; the `aws` profile logs ECS JSON for CloudWatch.
+- **Guarded `main`:** CI (format, lint, tests, image builds) is required by a ruleset; actions are pinned to commit SHAs, and Dependabot sends grouped weekly updates.
 - **Reproducible toolchain:** JDK, Maven and Node are pinned in a Nix flake.
-
-The checkout, step by step:
-
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant S as ProductService
-    participant DB as PostgreSQL
-    C->>S: POST /api/products/purchase
-    S->>DB: load product (with version)
-    alt not enough stock
-        S-->>C: 400 insufficient stock
-    else
-        S->>DB: insert order, decrement stock
-        S->>DB: UPDATE ... WHERE version = n
-        alt another checkout changed the row first
-            DB-->>S: 0 rows updated
-            S-->>C: error, transaction rolled back
-        else
-            S-->>C: 200 order PAID
-        end
-    end
-```
 
 ## Stack
 
-- **Backend:** Java 21, Spring Boot 4, JPA, Flyway, Maven
-- **Frontend:** React 19, TypeScript, Vite, Tailwind CSS, Vitest
+- **Backend:** Java 21, Spring Boot 4, Spring Data JPA, Flyway, Maven
+- **Frontend:** React 19, TypeScript, Vite, Tailwind CSS 4, React Router, TanStack Query, i18next
+- **Tests:** JUnit 5, Testcontainers, Vitest, Testing Library, MSW
 - **Database:** PostgreSQL 18
 - **Infrastructure:** Docker Compose today; AWS with Terraform planned
 
-## Run locally
-
-Requires Docker with Compose v2.
-
-```shell
-cp .env.example .env
-docker compose up --build
-```
-
-Compose starts the database, then the backend, then the frontend, each waiting for the previous one to be healthy. The app runs at `http://localhost:3000` and the API at `http://localhost:8080`. At startup the backend seeds three sample ice cream shops with today's and tomorrow's menus (`backend/src/main/resources/seed/`), and the legacy product catalog from `products.csv`.
-
-The database has no persistent volume, so data resets when the containers are removed:
-
-```shell
-docker compose down
-```
-
 ## API
-
-### Marketplace
 
 Public and read-only; dates and times are local to each business. Details in the [domain model](docs/domain-model.md#public-read-api).
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/api/businesses` | Every business with whether it is open now, or when it opens next |
+| `GET` | `/api/businesses` | Every business with its opening status and the items of its next menu |
 | `GET` | `/api/businesses/{slug}` | Profile, weekly hours and upcoming menus |
 | `GET` | `/api/menus/{id}` | A published menu with its items, prices and availability |
 
-Try it: `curl localhost:8080/api/businesses/sunny-scoops`.
-
-### Legacy product catalog
-
-Used by the current UI until the marketplace UI replaces it.
-
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/products` | All products |
-| `GET` | `/api/products/catalog` | Paginated, filterable catalog used by the frontend |
-| `POST` | `/api/products` | Create a product |
-| `PUT` | `/api/products/edit/{id}` | Update a product |
-| `DELETE` | `/api/products/delete/{id}` | Delete a product |
-| `POST` | `/api/products/purchase` | Buy a quantity of a product |
-
-A purchase of exactly 99 units simulates a declined payment, which is useful for testing the error flow.
+The original product catalog API (`/api/products`) still exists in the backend and is removed in the next PR.
 
 ## Development
 
@@ -177,6 +158,7 @@ mvn spotless:apply  # format Java and pom.xml
 
 # frontend/
 npm ci
+npm run dev         # with the backend on :8080; add ?theme=market to try another theme
 npm run lint && npm test -- --run && npm run build
 ```
 
@@ -186,10 +168,12 @@ Every pull request updates the documentation it affects, so `main` and its docs 
 
 | Document | Contents |
 |---|---|
-| [Product spec](docs/product-spec.md) | Scope, domain rules, order flow, internationalization |
+| [Product spec](docs/product-spec.md) | Scope, domain rules, order flow, rework roadmap |
 | [Domain model](docs/domain-model.md) | Tables, tenant integrity, time handling, read API, sample data |
+| [Architecture](docs/architecture.md) | Backend and frontend layers, patterns, enforced dependency rules, tests |
+| [Theming](docs/theming.md) | Design tokens, themes and how to add a vertical |
+| [i18n guide](docs/i18n.md) | How translations are wired in, dates and times, safety nets |
 | [Infra plan](docs/infra-plan.md) | AWS architecture, cost rules, work phases |
-| [i18n guide](docs/i18n.md) | How translations are wired in, safety nets, adding a text or a language |
 | [ADRs](docs/adr/) | Architecture decisions and their trade-offs |
 
 ## Layout
@@ -197,7 +181,7 @@ Every pull request updates the documentation it affects, so `main` and its docs 
 ```
 backend/    Spring Boot API
 frontend/   React app
-docs/       product spec, infra plan, ADRs (docs/adr/)
+docs/       guides, product spec, infra plan, ADRs (docs/adr/)
 ```
 
 ## License
