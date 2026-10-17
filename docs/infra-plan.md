@@ -110,6 +110,8 @@ The workflow has read-only permissions and actions are pinned to a commit SHA.
 
 Every Dependabot PR goes through the same CI and ruleset as any other change.
 
+**Runtime versions** (Java 21 and Node 22, both LTS) are upgraded by hand, because they must change together in `flake.nix`, the CI workflow, both Dockerfiles and `pom.xml` (`java.version`). Dependabot ignores them: major updates of the base images, the `maven` builder image (its tag embeds the JDK version, so a "minor" tag update can switch Java), and major updates of `@types/node`.
+
 **Ruleset on `main`** (configured in GitHub under *Settings → Rules → Rulesets*):
 
 - Restrict deletions and block force pushes.
@@ -121,7 +123,7 @@ Every Dependabot PR goes through the same CI and ruleset as any other change.
 
 ## Work phases
 
-The product rework ([product-spec.md](product-spec.md)) runs after Phase 0 and before Phase 4, so the deployment evidence comes from the real domain.
+The product rework ([roadmap in the product spec](product-spec.md#rework-roadmap)) runs after Phase 0 and before Phase 4, so the deployment evidence comes from the real domain.
 
 ### Phase 0: Prepare the app
 - [x] Migrate from MariaDB to PostgreSQL (driver, Flyway migrations, compose)

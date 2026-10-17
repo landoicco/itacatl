@@ -17,6 +17,10 @@ updates:
     directory: /frontend
     schedule:
       interval: weekly
+    ignore:
+      # Types must match the Node version we run (see Runtime versions in the infra plan)
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
     groups:
       npm-minor-and-patch:
         update-types: [minor, patch]
@@ -40,6 +44,13 @@ updates:
     directories: [/backend, /frontend]
     schedule:
       interval: weekly
+    ignore:
+      # A major image tag means a new Java or Node version, which is upgraded by hand
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
+      # Its tag embeds the JDK (3.9-eclipse-temurin-21-alpine), which Dependabot reads
+      # as part of a minor update and would silently move the build to another Java
+      - dependency-name: maven
     groups:
       docker-minor-and-patch:
         update-types: [minor, patch]
