@@ -53,6 +53,7 @@ public class BusinessDatabaseService implements BusinessService {
                     business.getSlug(),
                     business.getName(),
                     business.getDescription(),
+                    business.getTimeZone().getId(),
                     schedules.get(business.getId()).statusAt(localNow(business))))
         .toList();
   }

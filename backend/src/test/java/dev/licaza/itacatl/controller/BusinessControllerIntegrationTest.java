@@ -36,12 +36,14 @@ class BusinessControllerIntegrationTest {
                     "sunny-scoops",
                     "Sunny Scoops",
                     "Sorbets",
+                    "America/Mexico_City",
                     OpeningStatus.closedUntil(LocalDateTime.of(2026, 10, 17, 12, 0)))));
 
     mockMvc
         .perform(get("/api/businesses"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[0].slug").value("sunny-scoops"))
+        .andExpect(jsonPath("$[0].timeZone").value("America/Mexico_City"))
         .andExpect(jsonPath("$[0].openingStatus.state").value("CLOSED"))
         .andExpect(jsonPath("$[0].openingStatus.opensAt").value("2026-10-17T12:00:00"));
   }
