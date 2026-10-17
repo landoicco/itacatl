@@ -84,13 +84,15 @@ All endpoints are public and read-only. Dates and times are local to the busines
 
 | Method | Path | Returns |
 |---|---|---|
-| `GET` | `/api/businesses` | Every business, sorted by name, with its opening status |
+| `GET` | `/api/businesses` | Every business, sorted by name, with its time zone, opening status and `featuredItems` |
 | `GET` | `/api/businesses/{slug}` | Profile, weekly hours and published menus that have not ended, up to 7 days ahead |
 | `GET` | `/api/menus/{id}` | A published menu with its items, prices and availability |
 
 Businesses are addressed by **slug** (`sunny-scoops`), which gives readable, shareable URLs and does not expose internal IDs. The database checks that slugs are URL-safe.
 
 A **draft menu answers 404**, like a missing one, so customers cannot discover unpublished menus.
+
+**`featuredItems`** are the item names of each business's current or next menu within a week, so the home page can show what each business offers. They are loaded for every business in **two queries** (candidate menus, then their items), not one request or query per business: the classic N+1 problem. The "not ended yet" filter runs in Java, because each business has its own time zone and a single SQL `now` cannot fit them all.
 
 ### Errors
 
@@ -133,3 +135,8 @@ To add a business to the demo, add it to **both** seed files with the same item 
 | `MarketplaceSeederIntegrationTest` | Every seed file loads, follows the schedules and is idempotent |
 
 Integration tests run against PostgreSQL in Testcontainers, with Flyway enabled and Hibernate validating the entities against the schema.
+
+## Gotchas
+
+- **Run `mvn clean` after deleting or renaming a migration.** Maven copies resources into `target/classes` but never removes old ones, so a deleted `V1__…sql` stays there and Flyway fails with "Found more than one migration with version 1". CI always builds from scratch, so it only bites locally.
+- **Jackson 3 is stricter than Jackson 2.** `FAIL_ON_NULL_FOR_PRIMITIVES` is on by default: a JSON field missing for a primitive (`boolean`, `int`) fails instead of becoming `false` or `0`. Optional fields use wrapper types (`Boolean alcoholic` in `SeedFile`), and required numbers stay primitive so a missing value is caught.

@@ -54,6 +54,8 @@ A PostToolUse hook (`.claude/hooks/format.sh`) formats every file Claude edits w
 - **Language of content:** sample data and seed files are in English by default; Spanish content is a per-deployment setting (e.g. the `es-MX` seed file), and Spanish domain terms get an English gloss: ice cream shops (*neverías*). See `docs/domain-model.md`.
 - **Time:** never call `now()` directly; inject the `Clock` bean. Schedules are local times plus the business's zone ID.
 - **Backend layering:** controller → service interface → implementation → repository, with DTOs at the API boundary. Keep that structure.
+- **Frontend layering:** `app/` → `features/<name>/` → shared layers (`components/`, `api/`, `theme/`, `i18n/`). A feature never imports another feature; ESLint enforces it. Components use theme tokens (`bg-surface`, `rounded-card`, `text-display`), never raw colors or fonts. See `docs/architecture.md` and `docs/theming.md`.
+- **Vertical-agnostic naming:** code, API and branding name things generically (`items`, `featuredItems`, `business`), never after the demo vertical (`flavors`, `scoops`).
 - **Comments:** explain *why*, not *what*; match the density of the surrounding code.
 - **Configuration per environment:** Spring profiles `local` (docker compose) and `aws` (prod), activated with `SPRING_PROFILES_ACTIVE`. The same image runs everywhere, so don't use Maven profiles for environment differences.
 - **Logging:** SLF4J with `{}` placeholders, never `System.out`. Business events start with an emoji: 📦 data import, ⏭️ skipped record, ✅ success, 📉 out of stock, 💳 payment, 🔒 concurrency conflict, ❌ failure. Locally logs are colored text; the `aws` profile emits ECS JSON for CloudWatch.

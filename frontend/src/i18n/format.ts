@@ -10,10 +10,6 @@ export function formatCurrency(amount: number, locale: string): string {
   }).format(amount);
 }
 
-export function formatWeightKg(kg: number, locale: string): string {
-  return new Intl.NumberFormat(locale, { style: "unit", unit: "kilogram" }).format(kg);
-}
-
 /*
  * Dates and times from the API are local to the business ("2026-10-17", "21:00:00",
  * "2026-10-17T21:00:00"), without an offset. They are formatted as wall-clock values in UTC, so
