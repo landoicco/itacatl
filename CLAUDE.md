@@ -49,6 +49,7 @@ A PostToolUse hook (`.claude/hooks/format.sh`) formats every file Claude edits w
 - **Language:** the maintainer chats in Spanish, but everything committed (code, comments, docs, commit messages, PR descriptions) is in English.
 - **Docs in every PR:** each PR updates the docs it affects (README, `docs/`, ADRs), so `main` and its documentation never drift apart. A mechanism that gets added (a library, a pattern, a safety net) gets a guide in `docs/` explaining why it is there, how it is wired in and how to extend it. Ideas that were dropped are not documented.
 - **Internationalization:** no user-facing text is hardcoded. UI strings go to the locale catalogs (`frontend/src/i18n/locales/`, every key in `en` and `es-MX`), API errors are codes the client translates, and formatting is locale-aware. See `docs/i18n.md`.
+- **Spring first:** prefer Spring's own tools (Security, Session, Data, Validation, Scheduling) over managed services, unless the service provides something Spring can't.
 - **Flyway:** never edit an applied migration; add a new `V{n}__description.sql`.
 - **Backend layering:** controller → service interface → implementation → repository, with DTOs at the API boundary. Keep that structure.
 - **Comments:** explain *why*, not *what*; match the density of the surrounding code.

@@ -18,7 +18,7 @@ This is a work in progress, built in the open.
 |---|---|
 | PostgreSQL, CI, ruleset on `main`, hardened containers | ✅ Done |
 | Internationalization foundation (`en`, `es-MX`) | ✅ Done |
-| Marketplace domain: businesses, menus, reservations | 🚧 Next |
+| Marketplace domain: businesses, menus, reservations ([roadmap](docs/product-spec.md#rework-roadmap)) | 🚧 Next |
 | Terraform: bootstrap, modules, CI/CD | 📋 Planned |
 | Ephemeral AWS deploy with load test and recovery evidence | 📋 Planned |
 

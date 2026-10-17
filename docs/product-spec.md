@@ -8,7 +8,7 @@ An e-commerce platform for small Mexican businesses whose menu changes over time
 
 It works like a regular e-commerce. What makes it different is that menus are **dynamic**: they are valid for a specific service window and have limited stock.
 
-**One deploy is one marketplace for one vertical** (fondas, neverías, pulquerías…), with many businesses inside. The vertical is configuration (branding, texts, categories, seed data), not code. The first vertical is fondas.
+**One deploy is one marketplace for one vertical** (fondas, neverías, pulquerías…), with many businesses inside. The vertical is configuration (branding, texts, categories, seed data), not code. The first vertical is neverías: ice cream is understood everywhere, and a mix of fixed and rotating flavors shows what dynamic menus are for.
 
 The project has three goals:
 
@@ -41,10 +41,21 @@ Every feature must make one of these steps better. Anything else goes to [Later]
 
 - **Weekly schedule:** each business defines its service hours per day of the week (e.g. Sunday 8:00–14:00), plus date exceptions (closed on a holiday, a special opening).
 - **A menu belongs to a service:** it is published for a specific date and time window, not just for "today". Customers can reserve in advance (e.g. Saturday for Sunday's barbacoa), from a per-business opening time for reservations.
-- **Items:** each menu item has a price and a limited stock. A *comida corrida* combo (soup, rice or pasta, main dish, dessert, drink of the day) is one item with its courses listed, not a special menu structure.
+- **Catalog, menu and offer:** three levels, the classic catalog → offer → sale pattern.
+
+  | Level | What it is | Example (nevería) |
+  |---|---|---|
+  | **Item** | What the business knows how to make: name, description, suggested price, alcohol flag. Created once | *Nieve de maracuyá*, suggested $45 |
+  | **Menu** | What is sold in one service: a date and a time window | Saturday 25, 12:00–20:00 |
+  | **Menu item** | A catalog item offered in a menu, with its own price and limited stock | Maracuyá, $45, 30 scoops today |
+
+  A nevería with two fixed flavors and three rotating ones duplicates yesterday's menu and picks today's flavors from its catalog; the maracuyá that comes back every two weeks is already there.
+- **Prices:** the item's price is only a suggestion, prefilled when it is added to a menu and adjustable for that day. Changing it never alters published menus.
+- **Items are archived, never deleted,** so past menus and orders keep their meaning.
+- A *comida corrida* combo (soup, rice or pasta, main dish, dessert, drink of the day) is one item with its courses listed, not a special menu structure.
 - **Fast, mobile-first editing for owners:**
   - Duplicate a previous menu.
-  - Pick from a catalog of recurring items.
+  - Pick items from the catalog, or create one on the fly, which adds it to the catalog.
   - Mark an item as sold out in one tap.
 - **Real-time availability for customers** (SSE or WebSockets), e.g. "3 portions of mole left".
 - **Sharing:** shareable link and image for WhatsApp.
@@ -91,6 +102,7 @@ Any active state can also move to `EXPIRED` or `CANCELLED`, and the held stock r
 
 - **Computed availability:** available = total − sold − active holds (`expires_at > now`). Expiry is correct even if no background job runs on time. A scheduled job only updates states and sends notifications.
 - **Concurrency:** optimistic locking prevents holding stock that no longer exists.
+- **Orders copy the item name and price,** so renaming or archiving an item never changes what a past order says.
 - **Per-business time windows:** how long the customer has to submit a transfer and how long to pick up.
 - **Abuse protection:** a limit on active orders per phone number and a no-show history per customer.
 
@@ -131,7 +143,23 @@ Code, API, logs and docs are in English; deployments serve their users in their 
 
 ## Sample data
 
-`docker compose up` seeds sample businesses and menus, so the whole flow can be tried locally.
+`docker compose up` seeds sample neverías with their catalogs and menus, so the whole flow can be tried locally. Item names and descriptions are in Spanish, because they are business content, not UI text.
+
+## Rework roadmap
+
+The rework from the product catalog to this marketplace is built in vertical slices. Each slice is one PR (slice 1 is split in two because of its size) and leaves something that can be shown; the README is updated with the new state after each one.
+
+| # | Slice | Scope | Visible result |
+|---|---|---|---|
+| 1a | Domain model and read API | New migration that drops `products` and `orders` and creates the business, schedule, item, menu and menu item tables with `tenant_id`. Entities, repositories, services and a public read API (businesses, open and upcoming menus). Nevería seed data. Product code removed | API covered by integration tests |
+| 1b | Customer UI and redesign | Agreed visual style, then a mobile-first UI: neverías, today's menu, "opens tomorrow at 12:00" when closed. The generic catalog UI is removed | Product screenshots in the README |
+| 2 | Owner management and Spring Security | Owner and staff login with sessions in PostgreSQL (Spring Session JDBC) and CSRF. Item catalog (create, edit, archive), menus built by duplicating or picking from the catalog, publishing | Business panel |
+| 3 | Tenant isolation | Hibernate `@TenantId` and PostgreSQL Row-Level Security, with controlled cross-tenant public reads | Tests proving one business cannot see another's data |
+| 4 | Cash reservations | Orders with copied name and price, stock holds, expiry (`@Scheduled`), concurrency, error codes with `ProblemDetail` | The reservation flow |
+| 5 | Customer identity | WhatsApp OTP (logged locally), rate limits, customer session | Reserving with a verified phone |
+| 6 | Bank transfers and notifications | Payment states, CLABE and order reference, customer notifications | The full flow in this spec |
+
+Until slice 4, the app lets customers browse menus but not reserve.
 
 ## Later
 
