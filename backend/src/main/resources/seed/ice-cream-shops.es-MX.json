@@ -1,0 +1,142 @@
+{
+  "businesses": [
+    {
+      "slug": "neveria-el-sol",
+      "name": "Nevería El Sol",
+      "description": "Nevería familiar en la plaza principal desde 1987. Tres sabores de siempre, más los que trae la temporada.",
+      "timeZone": "America/Mexico_City",
+      "acceptsPickup": true,
+      "acceptsDineIn": true,
+      "hours": [
+        {
+          "days": ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"],
+          "opens": "11:00",
+          "closes": "21:00"
+        }
+      ],
+      "items": [
+        { "key": "lime", "name": "Nieve de limón", "description": "Ácida y refrescante, con limón mexicano.", "price": 40 },
+        { "key": "strawberry", "name": "Helado de fresa", "description": "Cremoso, con trozos de fresa natural.", "price": 45 },
+        { "key": "chocolate", "name": "Helado de chocolate", "description": "Con chocolate de Oaxaca y un toque de canela.", "price": 45 },
+        { "key": "passion-fruit", "name": "Nieve de maracuyá", "description": "Nuestro sabor de temporada más pedido.", "price": 45 },
+        { "key": "mango-chili", "name": "Nieve de mango con chile", "description": "Mango dulce con chile y limón.", "price": 45 },
+        { "key": "prickly-pear", "name": "Nieve de tuna", "description": "Rosa intenso, hecha con tuna roja.", "price": 45 },
+        { "key": "coconut", "name": "Helado de coco", "description": "Con coco tostado.", "price": 45 }
+      ],
+      "menus": [
+        {
+          "dayOffset": 0,
+          "items": [
+            { "item": "lime", "quantity": 40 },
+            { "item": "strawberry", "quantity": 30 },
+            { "item": "chocolate", "quantity": 30 },
+            { "item": "passion-fruit", "quantity": 15 },
+            { "item": "mango-chili", "quantity": 20 }
+          ]
+        },
+        {
+          "dayOffset": 1,
+          "items": [
+            { "item": "lime", "quantity": 40 },
+            { "item": "strawberry", "quantity": 30 },
+            { "item": "chocolate", "quantity": 30 },
+            { "item": "prickly-pear", "quantity": 20 },
+            { "item": "coconut", "quantity": 20, "price": 40 }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "la-esquina-helada",
+      "name": "La Esquina Helada",
+      "description": "Helado artesanal con sabores tradicionales mexicanos. Cerramos los lunes.",
+      "timeZone": "America/Mexico_City",
+      "acceptsPickup": true,
+      "acceptsDineIn": false,
+      "hours": [
+        {
+          "days": ["TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"],
+          "opens": "12:00",
+          "closes": "20:00"
+        }
+      ],
+      "items": [
+        { "key": "vanilla", "name": "Helado de vainilla", "description": "Con vainilla de Papantla, Veracruz.", "price": 50 },
+        { "key": "pecan", "name": "Helado de nuez", "description": "Nuez tostada en base de piloncillo.", "price": 55 },
+        { "key": "cajeta", "name": "Helado de cajeta", "description": "Cajeta de leche de cabra, cocida en cazo de cobre.", "price": 55 },
+        { "key": "mamey", "name": "Helado de mamey", "description": "Fruta tropical con notas de camote y almendra.", "price": 55 },
+        { "key": "rice-pudding", "name": "Helado de arroz con leche", "description": "Como el de la abuela, con canela.", "price": 50 },
+        { "key": "rompope", "name": "Helado de rompope", "description": "Licor tradicional de huevo. Contiene alcohol.", "price": 60, "alcoholic": true }
+      ],
+      "menus": [
+        {
+          "dayOffset": 0,
+          "items": [
+            { "item": "vanilla", "quantity": 25 },
+            { "item": "pecan", "quantity": 20 },
+            { "item": "cajeta", "quantity": 20 },
+            { "item": "rompope", "quantity": 10 }
+          ]
+        },
+        {
+          "dayOffset": 1,
+          "items": [
+            { "item": "vanilla", "quantity": 25 },
+            { "item": "pecan", "quantity": 20 },
+            { "item": "mamey", "quantity": 15 },
+            { "item": "rice-pudding", "quantity": 15 }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "paleteria-la-loma",
+      "name": "Paletería La Loma",
+      "description": "Paletas y nieves con fruta del mercado. Solo fines de semana.",
+      "timeZone": "America/Mexico_City",
+      "acceptsPickup": true,
+      "acceptsDineIn": false,
+      "hours": [
+        {
+          "days": ["FRIDAY", "SATURDAY", "SUNDAY"],
+          "opens": "13:00",
+          "closes": "19:00"
+        }
+      ],
+      "items": [
+        { "key": "cucumber-lime", "name": "Paleta de pepino con limón", "description": "Pepino fresco con limón y una pizca de sal.", "price": 30 },
+        { "key": "tamarind", "name": "Paleta de tamarindo", "description": "Agridulce, con chile en polvo aparte.", "price": 30 },
+        { "key": "watermelon", "name": "Paleta de sandía", "description": "Solo fruta, agua y un poco de azúcar.", "price": 30 },
+        { "key": "corn", "name": "Helado de elote", "description": "Hecho con elote fresco, como los de la calle.", "price": 40 },
+        { "key": "mezcal-lime", "name": "Nieve de mezcal con limón", "description": "Para adultos. Contiene alcohol.", "price": 55, "alcoholic": true }
+      ],
+      "menus": [
+        {
+          "dayOffset": 0,
+          "items": [
+            { "item": "cucumber-lime", "quantity": 30 },
+            { "item": "tamarind", "quantity": 30 },
+            { "item": "corn", "quantity": 15 },
+            { "item": "mezcal-lime", "quantity": 10 }
+          ]
+        },
+        {
+          "dayOffset": 1,
+          "items": [
+            { "item": "cucumber-lime", "quantity": 30 },
+            { "item": "watermelon", "quantity": 30 },
+            { "item": "corn", "quantity": 15 }
+          ]
+        },
+        {
+          "dayOffset": 2,
+          "items": [
+            { "item": "tamarind", "quantity": 30 },
+            { "item": "watermelon", "quantity": 30 },
+            { "item": "mezcal-lime", "quantity": 10 }
+          ]
+        }
+      ]
+    }
+  ]
+}

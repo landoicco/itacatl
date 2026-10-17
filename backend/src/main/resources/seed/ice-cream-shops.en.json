@@ -1,0 +1,142 @@
+{
+  "businesses": [
+    {
+      "slug": "sunny-scoops",
+      "name": "Sunny Scoops",
+      "description": "Family ice cream shop on the main square since 1987. Three flavors every day, plus the ones the season brings.",
+      "timeZone": "America/Mexico_City",
+      "acceptsPickup": true,
+      "acceptsDineIn": true,
+      "hours": [
+        {
+          "days": ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"],
+          "opens": "11:00",
+          "closes": "21:00"
+        }
+      ],
+      "items": [
+        { "key": "lime", "name": "Lime sorbet", "description": "Tart and refreshing, made with Mexican limes.", "price": 40 },
+        { "key": "strawberry", "name": "Strawberry ice cream", "description": "Creamy, with real strawberry pieces.", "price": 45 },
+        { "key": "chocolate", "name": "Chocolate ice cream", "description": "Made with Oaxacan chocolate and a hint of cinnamon.", "price": 45 },
+        { "key": "passion-fruit", "name": "Passion fruit sorbet", "description": "Our most requested seasonal flavor.", "price": 45 },
+        { "key": "mango-chili", "name": "Mango with chili sorbet", "description": "Sweet mango with a spicy chili and lime finish.", "price": 45 },
+        { "key": "prickly-pear", "name": "Prickly pear sorbet", "description": "Bright pink, made with red cactus fruit.", "price": 45 },
+        { "key": "coconut", "name": "Coconut ice cream", "description": "With toasted coconut flakes.", "price": 45 }
+      ],
+      "menus": [
+        {
+          "dayOffset": 0,
+          "items": [
+            { "item": "lime", "quantity": 40 },
+            { "item": "strawberry", "quantity": 30 },
+            { "item": "chocolate", "quantity": 30 },
+            { "item": "passion-fruit", "quantity": 15 },
+            { "item": "mango-chili", "quantity": 20 }
+          ]
+        },
+        {
+          "dayOffset": 1,
+          "items": [
+            { "item": "lime", "quantity": 40 },
+            { "item": "strawberry", "quantity": 30 },
+            { "item": "chocolate", "quantity": 30 },
+            { "item": "prickly-pear", "quantity": 20 },
+            { "item": "coconut", "quantity": 20, "price": 40 }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "the-frozen-corner",
+      "name": "The Frozen Corner",
+      "description": "Small-batch ice cream with traditional Mexican flavors. Closed on Mondays.",
+      "timeZone": "America/Mexico_City",
+      "acceptsPickup": true,
+      "acceptsDineIn": false,
+      "hours": [
+        {
+          "days": ["TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"],
+          "opens": "12:00",
+          "closes": "20:00"
+        }
+      ],
+      "items": [
+        { "key": "vanilla", "name": "Vanilla ice cream", "description": "Made with vanilla from Papantla, Veracruz.", "price": 50 },
+        { "key": "pecan", "name": "Pecan ice cream", "description": "Roasted pecans in a brown sugar base.", "price": 55 },
+        { "key": "cajeta", "name": "Cajeta ice cream", "description": "Goat milk caramel, slowly cooked in copper pots.", "price": 55 },
+        { "key": "mamey", "name": "Mamey ice cream", "description": "A tropical fruit with notes of sweet potato and almond.", "price": 55 },
+        { "key": "rice-pudding", "name": "Rice pudding ice cream", "description": "Like grandma's arroz con leche, with cinnamon.", "price": 50 },
+        { "key": "rompope", "name": "Rompope ice cream", "description": "Traditional eggnog liqueur. Contains alcohol.", "price": 60, "alcoholic": true }
+      ],
+      "menus": [
+        {
+          "dayOffset": 0,
+          "items": [
+            { "item": "vanilla", "quantity": 25 },
+            { "item": "pecan", "quantity": 20 },
+            { "item": "cajeta", "quantity": 20 },
+            { "item": "rompope", "quantity": 10 }
+          ]
+        },
+        {
+          "dayOffset": 1,
+          "items": [
+            { "item": "vanilla", "quantity": 25 },
+            { "item": "pecan", "quantity": 20 },
+            { "item": "mamey", "quantity": 15 },
+            { "item": "rice-pudding", "quantity": 15 }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "hilltop-paletas",
+      "name": "Hilltop Paletas",
+      "description": "Ice pops and sorbets made with market fruit. Weekends only.",
+      "timeZone": "America/Mexico_City",
+      "acceptsPickup": true,
+      "acceptsDineIn": false,
+      "hours": [
+        {
+          "days": ["FRIDAY", "SATURDAY", "SUNDAY"],
+          "opens": "13:00",
+          "closes": "19:00"
+        }
+      ],
+      "items": [
+        { "key": "cucumber-lime", "name": "Cucumber and lime ice pop", "description": "Fresh cucumber with lime and a pinch of salt.", "price": 30 },
+        { "key": "tamarind", "name": "Tamarind ice pop", "description": "Sweet and sour, with chili powder on the side.", "price": 30 },
+        { "key": "watermelon", "name": "Watermelon ice pop", "description": "Just fruit, water and a little sugar.", "price": 30 },
+        { "key": "corn", "name": "Sweet corn ice cream", "description": "Made with fresh corn, like the elotes on the street.", "price": 40 },
+        { "key": "mezcal-lime", "name": "Mezcal and lime sorbet", "description": "For grown-ups. Contains alcohol.", "price": 55, "alcoholic": true }
+      ],
+      "menus": [
+        {
+          "dayOffset": 0,
+          "items": [
+            { "item": "cucumber-lime", "quantity": 30 },
+            { "item": "tamarind", "quantity": 30 },
+            { "item": "corn", "quantity": 15 },
+            { "item": "mezcal-lime", "quantity": 10 }
+          ]
+        },
+        {
+          "dayOffset": 1,
+          "items": [
+            { "item": "cucumber-lime", "quantity": 30 },
+            { "item": "watermelon", "quantity": 30 },
+            { "item": "corn", "quantity": 15 }
+          ]
+        },
+        {
+          "dayOffset": 2,
+          "items": [
+            { "item": "tamarind", "quantity": 30 },
+            { "item": "watermelon", "quantity": 30 },
+            { "item": "mezcal-lime", "quantity": 10 }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -3,6 +3,7 @@ package dev.licaza.itacatl.exception;
 import dev.licaza.itacatl.dto.OrderResponseDTO;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -23,6 +24,16 @@ public class GlobalExceptionHandler {
   public ResponseEntity<String> handleInsufficientStock(InsufficientStockException ex) {
     // Return 400 Bad Request with the insufficient stock explanation
     return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ex.getMessage());
+  }
+
+  // RFC 9457 Problem Details (application/problem+json). The "code" property is stable, so the
+  // client translates it instead of showing the English detail to users.
+  @ExceptionHandler(ResourceNotFoundException.class)
+  public ProblemDetail handleResourceNotFound(ResourceNotFoundException ex) {
+    ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+    problem.setTitle("Resource not found");
+    problem.setProperty("code", ex.getCode());
+    return problem;
   }
 
   @ExceptionHandler(EntityNotFoundException.class)
