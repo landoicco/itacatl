@@ -25,6 +25,11 @@ public class ResourceNotFoundException extends RuntimeException {
     return new ResourceNotFoundException("ACCOUNT_NOT_FOUND", "No account with ID " + id);
   }
 
+  // Also for an item of another business: its ID is not revealed to exist
+  public static ResourceNotFoundException item(Long id) {
+    return new ResourceNotFoundException("ITEM_NOT_FOUND", "No item with ID " + id);
+  }
+
   public static ResourceNotFoundException menu(Long id) {
     return new ResourceNotFoundException("MENU_NOT_FOUND", "No published menu with ID " + id);
   }
