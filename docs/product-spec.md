@@ -151,8 +151,8 @@ The rework from the product catalog to this marketplace is built in vertical sli
 
 | # | Slice | Scope | Visible result |
 |---|---|---|---|
-| 1a | Domain model and read API | Marketplace schema as a squashed `V1` ([ADR 0003](adr/0003-squash-migrations-before-first-deploy.md)) with composite tenant foreign keys; the product catalog stays in a temporary `V2` so the current UI keeps working. Entities, services, public read API, ice cream shop seed data ([domain model](domain-model.md)) | API covered by integration tests |
-| 1b | Customer UI and redesign | Agreed visual style, then a mobile-first UI: ice cream shops, today's menu, "opens tomorrow at 12:00" when closed. Removes the product catalog: its UI, its code, the CSV seed and `V2` | Product screenshots in the README |
+| 1a | Domain model and read API | Marketplace schema as a squashed `V1` ([ADR 0003](adr/0003-squash-migrations-before-first-deploy.md)) with composite tenant foreign keys; the product catalog stays in a temporary migration so the current UI keeps working. Entities, services, public read API, ice cream shop seed data ([domain model](domain-model.md)) | API covered by integration tests |
+| 1b | Customer UI and redesign | Agreed visual style, then a mobile-first UI: ice cream shops, today's menu, "opens tomorrow at 12:00" when closed. Removes the product catalog: its UI, its code, the CSV seed and the temporary migration | Product screenshots in the README |
 | 2a | Owner and staff accounts | Accounts with per-business memberships, Spring Security sign-in with sessions in PostgreSQL (Spring Session JDBC) and CSRF ([security guide](security.md)) | Sign-in API covered by integration tests |
 | 2b | Owner API | Item catalog (create, edit, archive), menus built by duplicating or picking from the catalog, publishing; every endpoint checks the user's membership | API covered by integration tests |
 | 2c | Owner panel | Sign-in screen, catalog and menu editor, mobile-first | Business panel |

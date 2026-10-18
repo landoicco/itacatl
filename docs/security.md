@@ -31,7 +31,7 @@ Writing this by hand (a filter that reads a cookie and checks a password) looks 
 | Concept | What it is | In this repo |
 |---|---|---|
 | `SecurityFilterChain` | The ordered list of security filters, configured with the `HttpSecurity` builder | `SecurityConfig.securityFilterChain` |
-| `Authentication` | Who is making the request: a principal, credentials and authorities. It goes into an `AuthenticationManager` unauthenticated (email and password) and comes out authenticated (the account) | `UsernamePasswordAuthenticationToken` in `AuthController` |
+| `Authentication` | Who is making the request: a principal, credentials and authorities. It goes into an `AuthenticationManager` unauthenticated (email and password) and comes out authenticated (the account) | `UsernamePasswordAuthenticationToken` in `SessionLogin` |
 | `SecurityContext` | Holds the current request's `Authentication`. `SecurityContextHolder` keeps it in a thread-local while the request runs | Read by `@AuthenticationPrincipal` in controllers |
 | `SecurityContextRepository` | Where the context lives between requests. Loaded at the start of each request, saved after sign-in | The HTTP session (`SecurityConfig.securityContextRepository`) |
 | `AuthenticationManager` | Checks credentials. `ProviderManager` asks its `AuthenticationProvider`s in turn | `AuthenticationConfig.authenticationManager` |
@@ -64,7 +64,8 @@ Spring Security prints the chain at startup with `logging.level.org.springframew
 | `security/AccountUserDetailsService.java` | Finds an `AppUser` by email |
 | `security/AccountPrincipal.java` | The signed-in user kept in the session |
 | `security/SessionConfig.java` | Flags of the `SESSION` cookie |
-| `controller/AuthController.java` | `POST /api/auth/login`, `GET /api/auth/me` |
+| `security/SessionLogin.java` | Signs a user in: checks the credentials, protects the session and stores the user in it |
+| `controller/AuthController.java` | `POST /api/auth/login`, `GET /api/auth/me`. Only HTTP: sign-in goes to `SessionLogin`, the user's data to `AccountService` |
 | `exception/GlobalExceptionHandler.java` | Security errors as Problem Details with stable codes |
 | `db/migration/V2__create_accounts.sql` | `app_user` and `membership` |
 | `db/migration/V3__create_session_tables.sql` | Spring Session's tables |
@@ -100,32 +101,36 @@ Memberships are read from the database on each request that needs them (`GET /ap
 ```mermaid
 sequenceDiagram
     participant B as Browser
-    participant F as Security filters
+    participant F as Filters
     participant A as AuthController
+    participant L as SessionLogin
     participant M as AuthenticationManager
     participant DB as PostgreSQL
-    B->>F: GET /api/auth/me
-    F-->>B: 401 AUTHENTICATION_REQUIRED + cookie XSRF-TOKEN
+    B->>F: any request, e.g. GET /api/businesses
+    F-->>B: response + cookie XSRF-TOKEN
     B->>F: POST /api/auth/login, cookie XSRF-TOKEN, header X-XSRF-TOKEN
     F->>F: CsrfFilter: header matches cookie
     F->>A: credentials (JSON)
-    A->>M: authenticate(email, password)
+    A->>L: signIn(email, password)
+    L->>M: authenticate
     M->>DB: find app_user by email
     M->>M: bcrypt matches? enabled?
-    M-->>A: authenticated AccountPrincipal
-    A->>A: new session ID, new CSRF token
-    A->>A: save SecurityContext in the session
-    A->>DB: Spring Session inserts the session row
-    A-->>B: 200 user + businesses, cookie SESSION
+    M-->>L: authenticated AccountPrincipal
+    L->>L: new session ID, new CSRF token
+    L->>L: save SecurityContext in the session
+    L-->>A: AccountPrincipal
+    A-->>F: 200 user + businesses
+    F->>DB: Spring Session inserts the session row
+    F-->>B: response + cookie SESSION
 ```
 
-1. **The app gets a CSRF token.** Any response carries the `XSRF-TOKEN` cookie. The app's first call is `GET /api/auth/me`, which answers 401 when nobody is signed in and hands out the token.
+1. **The app gets a CSRF token.** Every response carries the `XSRF-TOKEN` cookie, so the app has one as soon as it has loaded anything, a marketplace page or `GET /api/auth/me`.
 2. **The login request passes the `CsrfFilter`,** because its `X-XSRF-TOKEN` header matches the cookie.
-3. **`AuthController` asks the `AuthenticationManager`** to check the credentials. `DaoAuthenticationProvider` loads the account through `AccountUserDetailsService`, checks that it is enabled, and compares the password with bcrypt.
-4. **On success, the controller does what a filter-based login would do:**
+3. **`AuthController` hands the credentials to `SessionLogin`,** which asks the `AuthenticationManager` to check them. `DaoAuthenticationProvider` loads the account through `AccountUserDetailsService`, checks that it is enabled, and compares the password with bcrypt.
+4. **On success, `SessionLogin` does what a filter-based login would do:**
    - `SessionAuthenticationStrategy` changes the session ID and replaces the CSRF token.
    - The `SecurityContext` is saved in the session through the `SecurityContextRepository`.
-5. **Spring Session stores the session in PostgreSQL** and sends the `SESSION` cookie. The response body is the user with their businesses.
+5. **The controller answers with the user and their businesses,** and on the way out Spring Session's filter stores the session in PostgreSQL and sends the `SESSION` cookie.
 
 On failure, `AuthenticationManager` throws an `AuthenticationException`, which becomes `401 INVALID_CREDENTIALS`.
 
@@ -148,7 +153,7 @@ Security errors happen inside filters, before Spring MVC, so `@RestControllerAdv
 | `ACCESS_DENIED` | 403 | A signed-in user without permission |
 | `ACCOUNT_NOT_FOUND` | 404 | A session whose account was deleted |
 
-The client translates the code, as with every other API error ([i18n guide](i18n.md)).
+The client translates the code, as with every other API error ([i18n guide](i18n.md)). These codes join the frontend's catalogs with the screens that show them, in the owner panel (slice 2c); until then the client would fall back to its generic error message.
 
 ## Passwords
 
@@ -218,7 +223,7 @@ A page on another origin cannot read the cookie (same-origin policy), so it cann
 | Decision | Instead of | Why |
 |---|---|---|
 | Server-side sessions in PostgreSQL | JWT | Revocable, no token storage in the browser, no refresh-token flow. See [ADR 0004](adr/0004-server-side-sessions-instead-of-jwt.md) |
-| A JSON `POST /api/auth/login` | `formLogin()` | `formLogin` expects a form post and answers with redirects and HTML, which a React app has to work around. The endpoint returns JSON and Problem Details; the cost is repeating three steps by hand (authenticate, session strategy, save the context) |
+| A JSON `POST /api/auth/login` | `formLogin()` | `formLogin` expects a form post and answers with redirects and HTML, which a React app has to work around. The endpoint returns JSON and Problem Details; the cost is repeating three steps by hand (authenticate, session strategy, save the context), kept together in `SessionLogin` |
 | An explicit `AuthenticationManager` bean | The one Spring Security builds internally | The login endpoint calls it directly, and the wiring is visible in one place |
 | Per-business memberships | Global roles as authorities | One person can be the owner of one business and staff in another |
 | No CORS | Allowing the frontend's origin | The app and the API share one origin everywhere (nginx locally, CloudFront in AWS, the Vite proxy in development). CORS with credentials would only add a way for another origin to use the session |
