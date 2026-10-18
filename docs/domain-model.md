@@ -124,6 +124,7 @@ Errors follow [RFC 9457 Problem Details](https://www.rfc-editor.org/rfc/rfc9457)
 - **Enabled** with `itacatl.seed.enabled=true` (the `local` profile does it; off by default, so production never gets sample data by accident).
 - **The file is a deployment setting**, like the UI's default locale: `itacatl.seed.file` defaults to `seed/ice-cream-shops.en.json`, and a Mexican deployment sets `ITACATL_SEED_FILE=classpath:seed/ice-cream-shops.es-MX.json`. Business content is stored as written, never machine-translated.
 - **Menus use a day offset**, not dates, so there are always menus for today and the next days. Each menu takes the business's first window that day, and is skipped if the business is closed.
+- **Demo accounts:** the file lists `users` (email and name) and each business its `members` with a role. Ana owns two shops, which shows one account running several businesses; Luis owns one and is staff in another. The file holds no passwords: every account gets `itacatl.seed.user-password`, which only the `local` profile sets (`itacatl-demo`), and seeding fails fast without it.
 - **Only into an empty database**, so restarting never duplicates data.
 - **Typos fail**: a menu that references an unknown item key throws. `MarketplaceSeederIntegrationTest` loads every seed file, so a mistake in any language breaks the build.
 
@@ -139,7 +140,7 @@ To add a business to the demo, add it to **both** seed files with the same item 
 | `TenantIntegrityIntegrationTest` | The composite foreign keys reject rows that mix businesses |
 | `AccountRepositoryIntegrationTest` | A user's businesses in one query, lowercase emails, one membership per user and business |
 | `BusinessControllerIntegrationTest` | The HTTP contract: local ISO dates, Problem Details |
-| `MarketplaceSeederIntegrationTest` | Every seed file loads, follows the schedules and is idempotent |
+| `MarketplaceSeederIntegrationTest` | Every seed file loads, follows the schedules, creates accounts that can sign in and is idempotent |
 
 Integration tests run against PostgreSQL in Testcontainers, with Flyway enabled and Hibernate validating the entities against the schema.
 

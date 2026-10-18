@@ -14,7 +14,10 @@ public class SeedConfig {
 
   @Bean
   ApplicationRunner marketplaceSeedRunner(
-      MarketplaceSeeder seeder, @Value("${itacatl.seed.file}") Resource file) {
-    return args -> seeder.seed(file);
+      MarketplaceSeeder seeder,
+      @Value("${itacatl.seed.file}") Resource file,
+      // No default: a deployment that enables the seed must choose the demo password
+      @Value("${itacatl.seed.user-password:}") String userPassword) {
+    return args -> seeder.seed(file, userPassword);
   }
 }

@@ -1,5 +1,6 @@
 package dev.licaza.itacatl.seed;
 
+import dev.licaza.itacatl.domain.MembershipRole;
 import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.LocalTime;
@@ -9,7 +10,13 @@ import java.util.List;
  * The shape of a seed file (src/main/resources/seed/*.json). Menus use a day offset instead of a
  * date, so the sample data always has menus for today and the next days, whenever it is loaded.
  */
-public record SeedFile(List<SeedBusiness> businesses) {
+public record SeedFile(List<SeedUser> users, List<SeedBusiness> businesses) {
+
+  /**
+   * A demo account. There is no password in the file: every seeded account gets the one in {@code
+   * itacatl.seed.user-password}.
+   */
+  public record SeedUser(String email, String name) {}
 
   public record SeedBusiness(
       String slug,
@@ -18,9 +25,15 @@ public record SeedFile(List<SeedBusiness> businesses) {
       String timeZone,
       boolean acceptsPickup,
       boolean acceptsDineIn,
+      List<SeedMember> members,
       List<SeedHours> hours,
       List<SeedItem> items,
       List<SeedMenu> menus) {}
+
+  /**
+   * @param email one of the file's {@link SeedUser}s
+   */
+  public record SeedMember(String email, MembershipRole role) {}
 
   public record SeedHours(List<DayOfWeek> days, LocalTime opens, LocalTime closes) {}
 
