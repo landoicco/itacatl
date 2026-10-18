@@ -1,11 +1,14 @@
 package dev.licaza.itacatl.exception;
 
+import dev.licaza.itacatl.dto.FieldErrorDTO;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.InsufficientAuthenticationException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.csrf.CsrfException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -18,6 +21,34 @@ public class GlobalExceptionHandler {
   @ExceptionHandler(ResourceNotFoundException.class)
   public ProblemDetail handleResourceNotFound(ResourceNotFoundException ex) {
     return problem(HttpStatus.NOT_FOUND, "Resource not found", ex.getMessage(), ex.getCode());
+  }
+
+  // A @Valid request body that breaks its constraints. Every invalid field is listed with the
+  // constraint's name as its code, so a form can show a translated message next to each input
+  @ExceptionHandler(MethodArgumentNotValidException.class)
+  public ProblemDetail handleValidation(MethodArgumentNotValidException ex) {
+    ProblemDetail problem =
+        problem(
+            HttpStatus.BAD_REQUEST,
+            "Invalid request",
+            "One or more fields are invalid",
+            "VALIDATION_FAILED");
+    problem.setProperty(
+        "errors",
+        ex.getBindingResult().getFieldErrors().stream()
+            .map(error -> new FieldErrorDTO(error.getField(), error.getCode()))
+            .toList());
+    return problem;
+  }
+
+  // A body that is not JSON, or has a value of the wrong type (text where a price goes)
+  @ExceptionHandler(HttpMessageNotReadableException.class)
+  public ProblemDetail handleUnreadableBody(HttpMessageNotReadableException ex) {
+    return problem(
+        HttpStatus.BAD_REQUEST,
+        "Malformed request",
+        "The request body could not be read",
+        "MALFORMED_REQUEST");
   }
 
   // An anonymous request to an endpoint that needs a signed-in user
