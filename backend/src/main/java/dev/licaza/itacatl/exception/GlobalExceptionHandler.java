@@ -23,6 +23,13 @@ public class GlobalExceptionHandler {
     return problem(HttpStatus.NOT_FOUND, "Resource not found", ex.getMessage(), ex.getCode());
   }
 
+  // 422: the request is well formed, but the rules of the business say no
+  @ExceptionHandler(BusinessRuleException.class)
+  public ProblemDetail handleBusinessRule(BusinessRuleException ex) {
+    return problem(
+        HttpStatus.UNPROCESSABLE_CONTENT, "Business rule violated", ex.getMessage(), ex.getCode());
+  }
+
   // A @Valid request body that breaks its constraints. Every invalid field is listed with the
   // constraint's name as its code, so a form can show a translated message next to each input
   @ExceptionHandler(MethodArgumentNotValidException.class)

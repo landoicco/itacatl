@@ -31,6 +31,7 @@ public class ResourceNotFoundException extends RuntimeException {
   }
 
   public static ResourceNotFoundException menu(Long id) {
-    return new ResourceNotFoundException("MENU_NOT_FOUND", "No published menu with ID " + id);
+    // The public API answers this for drafts too, so customers cannot discover them
+    return new ResourceNotFoundException("MENU_NOT_FOUND", "No menu with ID " + id);
   }
 }

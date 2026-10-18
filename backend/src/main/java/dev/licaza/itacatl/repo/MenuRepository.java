@@ -28,6 +28,12 @@ public interface MenuRepository extends JpaRepository<Menu, Long> {
 
   Optional<Menu> findByIdAndStatus(Long id, MenuStatus status);
 
+  // Management: always within one business, drafts included
+  Optional<Menu> findByIdAndTenantId(Long id, Long tenantId);
+
+  List<Menu> findByTenantIdAndServiceDateGreaterThanEqualOrderByServiceDateAscStartsAtAsc(
+      Long tenantId, LocalDate from);
+
   // Candidates for many businesses at once; each business's own "not ended yet" filter runs in
   // its local time in the service, since one SQL "now" cannot fit every time zone
   List<Menu> findByTenantIdInAndStatusAndServiceDateBetweenOrderByServiceDateAscStartsAtAsc(
