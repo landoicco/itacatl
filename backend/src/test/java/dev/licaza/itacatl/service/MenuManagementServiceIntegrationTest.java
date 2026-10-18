@@ -7,12 +7,16 @@ import static org.junit.jupiter.api.Assertions.*;
 import dev.licaza.itacatl.FixedClockConfig;
 import dev.licaza.itacatl.TestcontainersConfiguration;
 import dev.licaza.itacatl.domain.*;
+import dev.licaza.itacatl.dto.AddMenuItemDTO;
 import dev.licaza.itacatl.dto.ManagedMenuDTO;
 import dev.licaza.itacatl.dto.MenuRequestDTO;
+import dev.licaza.itacatl.dto.UpdateMenuItemDTO;
 import dev.licaza.itacatl.exception.BusinessRuleException;
 import dev.licaza.itacatl.exception.ResourceNotFoundException;
 import dev.licaza.itacatl.repo.*;
 import dev.licaza.itacatl.service.impl.MenuManagementDatabaseService;
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -118,7 +122,115 @@ class MenuManagementServiceIntegrationTest {
     assertEquals("MENU_NOT_FOUND", ex.getCode());
   }
 
-  private static MenuRequestDTO request(java.time.LocalDate date, String startsAt, String endsAt) {
+  @Test
+  void addItem_UsesTheSuggestedPriceUnlessOneIsGiven() {
+    Item lime = itemRepository.save(item(sunny, "Lime sorbet", "40.00"));
+    Item mango = itemRepository.save(item(sunny, "Mango sorbet", "45.00"));
+    Menu draft = menuRepository.save(menu(sunny, TODAY, "12:00", "20:00", MenuStatus.DRAFT));
+
+    menuService.addItem("sunny-scoops", draft.getId(), new AddMenuItemDTO(lime.getId(), null, 30));
+    ManagedMenuDTO menu =
+        menuService.addItem(
+            "sunny-scoops",
+            draft.getId(),
+            new AddMenuItemDTO(mango.getId(), new BigDecimal("39"), 20));
+
+    assertEquals(0, new BigDecimal("40").compareTo(menu.items().get(0).price()));
+    assertEquals(0, new BigDecimal("39").compareTo(menu.items().get(1).price()));
+    // The catalog keeps its own price
+    assertEquals(
+        0,
+        new BigDecimal("45")
+            .compareTo(itemRepository.findById(mango.getId()).orElseThrow().getSuggestedPrice()));
+  }
+
+  @Test
+  void addItem_ThatIsArchived_IsRejected() {
+    Item lime = item(sunny, "Lime sorbet", "40.00");
+    lime.setArchived(true);
+    Long limeId = itemRepository.save(lime).getId();
+    Menu draft = menuRepository.save(menu(sunny, TODAY, "12:00", "20:00", MenuStatus.DRAFT));
+
+    BusinessRuleException ex =
+        assertThrows(
+            BusinessRuleException.class,
+            () ->
+                menuService.addItem(
+                    "sunny-scoops", draft.getId(), new AddMenuItemDTO(limeId, null, 30)));
+
+    assertEquals("ITEM_ARCHIVED", ex.getCode());
+  }
+
+  @Test
+  void addItem_Twice_IsRejectedByTheUniqueConstraint() {
+    Item lime = itemRepository.save(item(sunny, "Lime sorbet", "40.00"));
+    Menu draft = menuRepository.save(menu(sunny, TODAY, "12:00", "20:00", MenuStatus.DRAFT));
+    menuService.addItem("sunny-scoops", draft.getId(), new AddMenuItemDTO(lime.getId(), null, 30));
+
+    BusinessRuleException ex =
+        assertThrows(
+            BusinessRuleException.class,
+            () ->
+                menuService.addItem(
+                    "sunny-scoops", draft.getId(), new AddMenuItemDTO(lime.getId(), null, 10)));
+
+    assertEquals("ITEM_ALREADY_IN_MENU", ex.getCode());
+  }
+
+  @Test
+  void addItem_FromAnotherBusinessesCatalog_IsNotFound() {
+    Item cornersItem = itemRepository.save(item(corner, "Vanilla ice cream", "50.00"));
+    Menu draft = menuRepository.save(menu(sunny, TODAY, "12:00", "20:00", MenuStatus.DRAFT));
+
+    ResourceNotFoundException ex =
+        assertThrows(
+            ResourceNotFoundException.class,
+            () ->
+                menuService.addItem(
+                    "sunny-scoops",
+                    draft.getId(),
+                    new AddMenuItemDTO(cornersItem.getId(), null, 5)));
+
+    assertEquals("ITEM_NOT_FOUND", ex.getCode());
+  }
+
+  @Test
+  void updateAndRemoveItem_ChangeOnlyThatMenu() {
+    Item lime = itemRepository.save(item(sunny, "Lime sorbet", "40.00"));
+    Menu published =
+        menuRepository.save(menu(sunny, TODAY, "12:00", "20:00", MenuStatus.PUBLISHED));
+    menuItemRepository.save(menuItem(published, lime, "40.00", 30));
+
+    ManagedMenuDTO updated =
+        menuService.updateItem(
+            "sunny-scoops",
+            published.getId(),
+            lime.getId(),
+            new UpdateMenuItemDTO(new BigDecimal("35"), 12));
+    assertEquals(12, updated.items().getFirst().quantity());
+
+    assertTrue(
+        menuService.removeItem("sunny-scoops", published.getId(), lime.getId()).items().isEmpty());
+    assertTrue(itemRepository.existsById(lime.getId()));
+  }
+
+  @Test
+  void changingAPastMenu_IsRejected() {
+    Item lime = itemRepository.save(item(sunny, "Lime sorbet", "40.00"));
+    Menu yesterday =
+        menuRepository.save(
+            menu(sunny, TODAY.minusDays(1), "12:00", "20:00", MenuStatus.PUBLISHED));
+    menuItemRepository.save(menuItem(yesterday, lime, "40.00", 30));
+
+    BusinessRuleException ex =
+        assertThrows(
+            BusinessRuleException.class,
+            () -> menuService.removeItem("sunny-scoops", yesterday.getId(), lime.getId()));
+
+    assertEquals("MENU_DATE_IN_PAST", ex.getCode());
+  }
+
+  private static MenuRequestDTO request(LocalDate date, String startsAt, String endsAt) {
     return new MenuRequestDTO(date, LocalTime.parse(startsAt), LocalTime.parse(endsAt));
   }
 }

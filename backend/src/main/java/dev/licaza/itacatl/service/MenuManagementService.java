@@ -1,7 +1,9 @@
 package dev.licaza.itacatl.service;
 
+import dev.licaza.itacatl.dto.AddMenuItemDTO;
 import dev.licaza.itacatl.dto.ManagedMenuDTO;
 import dev.licaza.itacatl.dto.MenuRequestDTO;
+import dev.licaza.itacatl.dto.UpdateMenuItemDTO;
 import java.time.LocalDate;
 import java.util.List;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -34,4 +36,24 @@ public interface MenuManagementService {
    */
   @PreAuthorize("@businessAccess.canManage(authentication, #slug)")
   ManagedMenuDTO createDraft(String slug, MenuRequestDTO request);
+
+  /*
+   * The menu's items. Published menus can change too, until orders exist (slice 4); past menus
+   * cannot. Every change answers with the whole menu, so the panel replaces its copy.
+   */
+
+  /**
+   * Offers a catalog item, at its suggested price unless the request sets one.
+   *
+   * @throws dev.licaza.itacatl.exception.BusinessRuleException if the item is archived or already
+   *     in the menu, or the menu is in the past
+   */
+  @PreAuthorize("@businessAccess.canManage(authentication, #slug)")
+  ManagedMenuDTO addItem(String slug, Long menuId, AddMenuItemDTO request);
+
+  @PreAuthorize("@businessAccess.canManage(authentication, #slug)")
+  ManagedMenuDTO updateItem(String slug, Long menuId, Long itemId, UpdateMenuItemDTO request);
+
+  @PreAuthorize("@businessAccess.canManage(authentication, #slug)")
+  ManagedMenuDTO removeItem(String slug, Long menuId, Long itemId);
 }

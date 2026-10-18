@@ -30,6 +30,12 @@ public class ResourceNotFoundException extends RuntimeException {
     return new ResourceNotFoundException("ITEM_NOT_FOUND", "No item with ID " + id);
   }
 
+  // The catalog item exists, but this menu does not offer it
+  public static ResourceNotFoundException menuItem(Long menuId, Long itemId) {
+    return new ResourceNotFoundException(
+        "MENU_ITEM_NOT_FOUND", "Menu " + menuId + " does not offer item " + itemId);
+  }
+
   public static ResourceNotFoundException menu(Long id) {
     // The public API answers this for drafts too, so customers cannot discover them
     return new ResourceNotFoundException("MENU_NOT_FOUND", "No menu with ID " + id);

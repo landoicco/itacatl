@@ -22,8 +22,19 @@ public class BusinessRuleException extends RuntimeException {
     return new BusinessRuleException("INVALID_TIME_WINDOW", "A menu must end after it starts");
   }
 
-  // "Past" in the business's own time zone
+  // "Past" in the business's own time zone. Also for changing a past menu: it is history
   public static BusinessRuleException menuDateInPast(LocalDate date) {
-    return new BusinessRuleException("MENU_DATE_IN_PAST", "Cannot plan a menu for " + date);
+    return new BusinessRuleException(
+        "MENU_DATE_IN_PAST", "Cannot plan or change a menu for " + date);
+  }
+
+  public static BusinessRuleException itemArchived(Long itemId) {
+    return new BusinessRuleException(
+        "ITEM_ARCHIVED", "Item " + itemId + " is archived; unarchive it to offer it");
+  }
+
+  public static BusinessRuleException itemAlreadyInMenu(Long itemId) {
+    return new BusinessRuleException(
+        "ITEM_ALREADY_IN_MENU", "Item " + itemId + " is already in this menu");
   }
 }

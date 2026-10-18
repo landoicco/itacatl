@@ -3,6 +3,7 @@ package dev.licaza.itacatl.repo;
 import dev.licaza.itacatl.domain.MenuItem;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
@@ -25,4 +26,7 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long> {
       ORDER BY mi.item.name
       """)
   List<MenuItem> findByMenuIdInWithItem(Collection<Long> menuIds);
+
+  // A menu offers each catalog item once (uq_menu_item), so the item addresses the menu item
+  Optional<MenuItem> findByMenuIdAndItemId(Long menuId, Long itemId);
 }
