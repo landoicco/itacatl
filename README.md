@@ -145,8 +145,6 @@ Public and read-only; dates and times are local to each business. Details in the
 | `GET` | `/api/businesses/{slug}` | Profile, weekly hours and upcoming menus |
 | `GET` | `/api/menus/{id}` | A published menu with its items, prices and availability |
 
-The original product catalog API (`/api/products`) still exists in the backend and is removed in the next PR.
-
 ## Development
 
 The toolchain (JDK, Maven, Node) is pinned in `flake.nix`. Run `nix develop` to enter it.
