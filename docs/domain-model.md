@@ -12,6 +12,8 @@ erDiagram
     BUSINESS ||--o{ MENU : publishes
     MENU ||--o{ MENU_ITEM : offers
     ITEM ||--o{ MENU_ITEM : "offered as"
+    APP_USER ||--o{ MEMBERSHIP : "works for"
+    BUSINESS ||--o{ MEMBERSHIP : "run by"
 ```
 
 | Table | What it is | Example (ice cream shop) |
@@ -22,10 +24,14 @@ erDiagram
 | `item` | What the business knows how to make: the catalog | Passion fruit sorbet, suggested $45 |
 | `menu` | What is sold in one service: a date and a local time window | Saturday 17, 11:00–21:00 |
 | `menu_item` | A catalog item offered in a menu, with that day's price and stock | Passion fruit, $45, 15 scoops |
+| `app_user` | Someone who signs in to manage businesses. Customers have no account | Ana, `ana@example.com` |
+| `membership` | A user's role (`OWNER` or `STAFF`) in one business | Ana owns Sunny Scoops |
+
+Accounts are a table plus memberships, not a business column on the user, so one person can run several businesses. How they sign in: [security guide](security.md).
 
 This is the classic **catalog → offer → sale** pattern. The catalog changes rarely; menus change every day; orders (slice 4) will copy the name and price of what was sold.
 
-Code: entities in `backend/src/main/java/dev/licaza/itacatl/domain/`, schema in `db/migration/V1__create_marketplace_schema.sql`.
+Code: entities in `backend/src/main/java/dev/licaza/itacatl/domain/`, schema in `db/migration/V1__create_marketplace_schema.sql` (marketplace) and `V2__create_accounts.sql` (accounts).
 
 ## Decisions
 
@@ -131,6 +137,7 @@ To add a business to the demo, add it to **both** seed files with the same item 
 | `BusinessServiceIntegrationTest` | Local opening status per business; which menus count as upcoming |
 | `MenuServiceIntegrationTest` | Menu items with the day's price; drafts are not found |
 | `TenantIntegrityIntegrationTest` | The composite foreign keys reject rows that mix businesses |
+| `AccountRepositoryIntegrationTest` | A user's businesses in one query, lowercase emails, one membership per user and business |
 | `BusinessControllerIntegrationTest` | The HTTP contract: local ISO dates, Problem Details |
 | `MarketplaceSeederIntegrationTest` | Every seed file loads, follows the schedules and is idempotent |
 
