@@ -6,6 +6,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
-  // Callers pass the email already lowercased, like it is stored
+  // Callers pass the email through AppUser.normalizeEmail, like it is stored
   Optional<AppUser> findByEmail(String email);
 }

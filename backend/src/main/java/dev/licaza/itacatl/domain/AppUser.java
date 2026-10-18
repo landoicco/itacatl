@@ -1,6 +1,7 @@
 package dev.licaza.itacatl.domain;
 
 import jakarta.persistence.*;
+import java.util.Locale;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -30,4 +31,11 @@ public class AppUser {
 
   // Disabled accounts cannot sign in, but keep their history
   private boolean enabled = true;
+
+  /**
+   * Trims and lowercases an email, the way it is stored. Every lookup and insert goes through it.
+   */
+  public static String normalizeEmail(String email) {
+    return email == null ? null : email.strip().toLowerCase(Locale.ROOT);
+  }
 }
