@@ -20,6 +20,11 @@ public class ResourceNotFoundException extends RuntimeException {
     return new ResourceNotFoundException("BUSINESS_NOT_FOUND", "No business with slug " + slug);
   }
 
+  // A session whose account was deleted after sign-in
+  public static ResourceNotFoundException account(Long id) {
+    return new ResourceNotFoundException("ACCOUNT_NOT_FOUND", "No account with ID " + id);
+  }
+
   public static ResourceNotFoundException menu(Long id) {
     return new ResourceNotFoundException("MENU_NOT_FOUND", "No published menu with ID " + id);
   }
