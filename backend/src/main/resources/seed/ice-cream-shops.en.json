@@ -1,4 +1,8 @@
 {
+  "users": [
+    { "email": "ana@example.com", "name": "Ana" },
+    { "email": "luis@example.com", "name": "Luis" }
+  ],
   "businesses": [
     {
       "slug": "sunny-scoops",
@@ -7,6 +11,10 @@
       "timeZone": "America/Mexico_City",
       "acceptsPickup": true,
       "acceptsDineIn": true,
+      "members": [
+        { "email": "ana@example.com", "role": "OWNER" },
+        { "email": "luis@example.com", "role": "STAFF" }
+      ],
       "hours": [
         {
           "days": ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"],
@@ -53,6 +61,7 @@
       "timeZone": "America/Mexico_City",
       "acceptsPickup": true,
       "acceptsDineIn": false,
+      "members": [{ "email": "luis@example.com", "role": "OWNER" }],
       "hours": [
         {
           "days": ["TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"],
@@ -96,6 +105,7 @@
       "timeZone": "America/Mexico_City",
       "acceptsPickup": true,
       "acceptsDineIn": false,
+      "members": [{ "email": "ana@example.com", "role": "OWNER" }],
       "hours": [
         {
           "days": ["FRIDAY", "SATURDAY", "SUNDAY"],

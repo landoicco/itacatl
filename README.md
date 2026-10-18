@@ -33,7 +33,8 @@ A work in progress, built in the open.
 | Internationalization (`en`, `es-MX`) | ✅ Done |
 | Marketplace domain model and read API | ✅ Done |
 | Customer UI: themes, phone and desktop layouts | ✅ Done |
-| Owners, tenant isolation, reservations and payments ([roadmap](docs/product-spec.md#rework-roadmap)) | 🚧 Next |
+| Owner and staff accounts: Spring Security, sessions in PostgreSQL | ✅ Done |
+| Owner panel, tenant isolation, reservations and payments ([roadmap](docs/product-spec.md#rework-roadmap)) | 🚧 Next |
 | Terraform: bootstrap, modules, CI/CD | 📋 Planned |
 | Ephemeral AWS deploy with load test and recovery evidence | 📋 Planned |
 
@@ -51,6 +52,8 @@ Open `http://localhost:3000`. The backend seeds three sample ice cream shops wit
 ```shell
 curl -s localhost:8080/api/businesses | jq
 ```
+
+The seed also creates two demo accounts, `ana@example.com` (owner of two shops) and `luis@example.com` (owner of one, staff in another), both with the password `itacatl-demo`. The owner panel comes in the next slice; meanwhile the [security guide](docs/security.md#signing-in) shows the sign-in flow.
 
 The database has no persistent volume, so data resets with `docker compose down`.
 
@@ -115,6 +118,7 @@ Layers, patterns and the rules that keep them: [architecture guide](docs/archite
 - **Deterministic time:** schedules are local times plus a zone ID, and "now" comes from an injected `Clock`, so opening hours are tested at a frozen moment.
 - **No N+1:** the shop list loads every shop's hours and next menu in a fixed number of queries.
 - **Real database in tests:** integration tests run against PostgreSQL in Testcontainers, which also validates every Flyway migration.
+- **Sessions that survive the server:** Spring Security with sessions stored in PostgreSQL by Spring Session, so a replaced spot instance signs nobody out. CSRF tokens, session fixation protection and one error for every failed sign-in, so emails cannot be enumerated ([security guide](docs/security.md)).
 
 **Frontend**
 - **Themes as design tokens:** components only use semantic utilities (`bg-surface`, `rounded-card`), so a vertical's identity is a block of CSS variables ([theming](docs/theming.md)).
@@ -129,7 +133,7 @@ Layers, patterns and the rules that keep them: [architecture guide](docs/archite
 
 ## Stack
 
-- **Backend:** Java 21, Spring Boot 4, Spring Data JPA, Flyway, Maven
+- **Backend:** Java 21, Spring Boot 4, Spring Security, Spring Session JDBC, Spring Data JPA, Flyway, Maven
 - **Frontend:** React 19, TypeScript, Vite, Tailwind CSS 4, React Router, TanStack Query, i18next
 - **Tests:** JUnit 5, Testcontainers, Vitest, Testing Library, MSW
 - **Database:** PostgreSQL 18
@@ -137,13 +141,21 @@ Layers, patterns and the rules that keep them: [architecture guide](docs/archite
 
 ## API
 
-Public and read-only; dates and times are local to each business. Details in the [domain model](docs/domain-model.md#public-read-api).
+The marketplace is public and read-only; dates and times are local to each business. Details in the [domain model](docs/domain-model.md#public-read-api).
 
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/api/businesses` | Every business with its opening status and the items of its next menu |
 | `GET` | `/api/businesses/{slug}` | Profile, weekly hours and upcoming menus |
 | `GET` | `/api/menus/{id}` | A published menu with its items, prices and availability |
+
+Accounts sign in with a session cookie; `POST` requests need the CSRF token. Details in the [security guide](docs/security.md).
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/auth/login` | Signs in with email and password; returns the user and their businesses |
+| `POST` | `/api/auth/logout` | Ends the session |
+| `GET` | `/api/auth/me` | The signed-in user and their businesses, or 401 |
 
 ## Development
 
@@ -169,6 +181,7 @@ Every pull request updates the documentation it affects, so `main` and its docs 
 | [Product spec](docs/product-spec.md) | Scope, domain rules, order flow, rework roadmap |
 | [Domain model](docs/domain-model.md) | Tables, tenant integrity, time handling, read API, sample data |
 | [Architecture](docs/architecture.md) | Backend and frontend layers, patterns, enforced dependency rules, tests |
+| [Security](docs/security.md) | Spring Security, sign-in, sessions in PostgreSQL, CSRF, interview questions |
 | [Theming](docs/theming.md) | Design tokens, themes and how to add a vertical |
 | [i18n guide](docs/i18n.md) | How translations are wired in, dates and times, safety nets |
 | [Infra plan](docs/infra-plan.md) | AWS architecture, cost rules, work phases |

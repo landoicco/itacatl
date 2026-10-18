@@ -7,19 +7,23 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import dev.licaza.itacatl.domain.OpeningStatus;
 import dev.licaza.itacatl.dto.BusinessSummaryDTO;
 import dev.licaza.itacatl.exception.ResourceNotFoundException;
+import dev.licaza.itacatl.security.SecurityConfig;
 import dev.licaza.itacatl.service.BusinessService;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-// Checks the HTTP contract the frontend relies on: JSON shapes, date formats and error bodies
+// Checks the HTTP contract the frontend relies on: JSON shapes, date formats and error bodies.
+// The real security rules are imported, so the test also proves these endpoints are public.
 @WebMvcTest(BusinessController.class)
+@Import(SecurityConfig.class)
 @ActiveProfiles("test")
 class BusinessControllerIntegrationTest {
 

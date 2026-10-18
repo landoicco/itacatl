@@ -147,13 +147,15 @@ Code, API, logs and docs are in English; deployments serve their users in their 
 
 ## Rework roadmap
 
-The rework from the product catalog to this marketplace is built in vertical slices. Each slice is one PR (slice 1 is split in two because of its size) and leaves something that can be shown; the README is updated with the new state after each one.
+The rework from the product catalog to this marketplace is built in vertical slices. Each slice is one PR (slices 1 and 2 are split because of their size) and leaves something that can be shown; the README is updated with the new state after each one.
 
 | # | Slice | Scope | Visible result |
 |---|---|---|---|
-| 1a | Domain model and read API | Marketplace schema as a squashed `V1` ([ADR 0003](adr/0003-squash-migrations-before-first-deploy.md)) with composite tenant foreign keys; the product catalog stays in a temporary `V2` so the current UI keeps working. Entities, services, public read API, ice cream shop seed data ([domain model](domain-model.md)) | API covered by integration tests |
-| 1b | Customer UI and redesign | Agreed visual style, then a mobile-first UI: ice cream shops, today's menu, "opens tomorrow at 12:00" when closed. Removes the product catalog: its UI, its code, the CSV seed and `V2` | Product screenshots in the README |
-| 2 | Owner management and Spring Security | Owner and staff login with sessions in PostgreSQL (Spring Session JDBC) and CSRF. Item catalog (create, edit, archive), menus built by duplicating or picking from the catalog, publishing | Business panel |
+| 1a | Domain model and read API | Marketplace schema as a squashed `V1` ([ADR 0003](adr/0003-squash-migrations-before-first-deploy.md)) with composite tenant foreign keys; the product catalog stays in a temporary migration so the current UI keeps working. Entities, services, public read API, ice cream shop seed data ([domain model](domain-model.md)) | API covered by integration tests |
+| 1b | Customer UI and redesign | Agreed visual style, then a mobile-first UI: ice cream shops, today's menu, "opens tomorrow at 12:00" when closed. Removes the product catalog: its UI, its code, the CSV seed and the temporary migration | Product screenshots in the README |
+| 2a | Owner and staff accounts | Accounts with per-business memberships, Spring Security sign-in with sessions in PostgreSQL (Spring Session JDBC) and CSRF ([security guide](security.md)) | Sign-in API covered by integration tests |
+| 2b | Owner API | Item catalog (create, edit, archive), menus built by duplicating or picking from the catalog, publishing; every endpoint checks the user's membership | API covered by integration tests |
+| 2c | Owner panel | Sign-in screen, catalog and menu editor, mobile-first | Business panel |
 | 3 | Tenant isolation | Hibernate `@TenantId` and PostgreSQL Row-Level Security, with controlled cross-tenant public reads | Tests proving one business cannot see another's data |
 | 4 | Cash reservations | Orders with copied name and price, stock holds, expiry (`@Scheduled`), concurrency, error codes with `ProblemDetail` | The reservation flow |
 | 5 | Customer identity | WhatsApp OTP (logged locally), rate limits, customer session | Reserving with a verified phone |

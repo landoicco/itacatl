@@ -42,7 +42,8 @@ flowchart LR
 - **Services** hold the use cases and their transactions (`@Transactional(readOnly = true)` for reads).
 - **Repositories** are Spring Data interfaces; queries that need care (fetch joins, time windows) are explicit JPQL.
 - **DTOs** are Java records. Entities never reach the JSON, so the API can stay stable while the schema evolves.
-- **Errors** become [RFC 9457 Problem Details](domain-model.md#errors) in one place, `GlobalExceptionHandler`.
+- **Errors** become [RFC 9457 Problem Details](domain-model.md#errors) in one place, `GlobalExceptionHandler`, including the 401 and 403 answers of Spring Security's filters.
+- **Security** lives in `security/`: the filter chain, how credentials are checked, the signed-in principal and the session cookie. It runs before any controller ([security guide](security.md)).
 
 ### Patterns
 
@@ -58,6 +59,8 @@ flowchart LR
 | Multi-tenancy by discriminator | `tenant_id` + composite foreign keys | One schema for every business; the database rejects cross-tenant rows |
 | Optimistic locking | `@Version` on menu items | Concurrent reservations of the last unit cannot both succeed (slice 4) |
 | Batch loading | `findByTenantIdIn`, `findByMenuIdInWithItem` | A fixed number of queries per page instead of N+1 |
+| Chain of responsibility | Spring Security's filter chain | Each filter handles one concern (session, CSRF, authorization) and passes the request on or stops it |
+| Strategy | `PasswordEncoder`, `SessionAuthenticationStrategy` | The hashing algorithm and what happens to the session on sign-in are swappable objects, not code paths |
 
 **Planned:** Ports & Adapters (hexagonal) for notifications and payments, as the [product spec](product-spec.md) describes: a notification port with a WhatsApp adapter, a payment port with gateway adapters.
 
@@ -115,7 +118,7 @@ components/, api/, theme/ or i18n/.
 | Level | Backend | Frontend |
 |---|---|---|
 | Unit | `WeeklyScheduleTest`: pure rules with fixed dates | Formatters, item colors, the API client with a stubbed `fetch` |
-| Integration | Services, repositories and the seeder against PostgreSQL in Testcontainers, with a fixed `Clock` | Pages through the real routes, with the API faked by **MSW** at the network level |
-| Contract | `@WebMvcTest`: JSON shapes, date formats, Problem Details | Catalog parity across locales |
+| Integration | Services, repositories and the seeder against PostgreSQL in Testcontainers, with a fixed `Clock`; the sign-in flow over HTTP with the full application (`@SpringBootTest`) | Pages through the real routes, with the API faked by **MSW** at the network level |
+| Contract | `@WebMvcTest` with the real security rules: JSON shapes, date formats, Problem Details, public access | Catalog parity across locales |
 
 Both sides freeze time in tests: the backend injects a fixed `Clock`, the frontend fakes only `Date` (`vi.useFakeTimers({ toFake: ["Date"] })`) so promises and timers keep working.
