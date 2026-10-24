@@ -1,6 +1,6 @@
 # Domain model
 
-How the marketplace is modeled in the backend: the tables, why they look like this, how time and tenants are handled, and the public read API. The product rules live in the [product spec](product-spec.md).
+How the marketplace is modeled in the backend: the tables, why they look like this, how time and tenants are handled, the public read API and the management API. The product rules live in the [product spec](product-spec.md).
 
 ## Overview
 
@@ -102,7 +102,55 @@ A **draft menu answers 404**, like a missing one, so customers cannot discover u
 
 **`featuredItems`** are the item names of each business's current or next menu within a week, so the home page can show what each business offers. They are loaded for every business in **two queries** (candidate menus, then their items), not one request or query per business: the classic N+1 problem. The "not ended yet" filter runs in Java, because each business has its own time zone and a single SQL `now` cannot fit them all.
 
-### Errors
+## Management API
+
+What the owner panel (slice 2c) uses. Every endpoint lives under `/api/manage/businesses/{slug}` and needs a signed-in member of that business: owners change things, staff only read. How that is checked: [security guide](security.md#per-business-permissions-method-security).
+
+| Method | Path | Does |
+|---|---|---|
+| `GET` | `/items` | The catalog, archived items included, by name |
+| `POST` | `/items` | Creates an item (201) |
+| `PUT` | `/items/{itemId}` | Replaces an item's fields. Menus keep their own price |
+| `POST` | `/items/{itemId}/archive`, `/unarchive` | Hides an item from the catalog, or brings it back |
+| `GET` | `/menus?from=` | Menus from a date on, drafts included; from today by default |
+| `GET` | `/menus/{menuId}` | One menu with its items |
+| `POST` | `/menus` | Creates an empty draft for a date and window (201) |
+| `PUT` | `/menus/{menuId}` | Moves a draft to another date or window |
+| `POST` | `/menus/{menuId}/duplicate` | A new draft with the menu's items, for another service (201) |
+| `POST` | `/menus/{menuId}/publish` | Shows the menu to customers |
+| `DELETE` | `/menus/{menuId}` | Deletes a draft (204) |
+| `POST` | `/menus/{menuId}/items` | Offers a catalog item, at its suggested price unless one is given |
+| `PUT` | `/menus/{menuId}/items/{itemId}` | That day's price and quantity |
+| `DELETE` | `/menus/{menuId}/items/{itemId}` | Stops offering the item |
+
+How it is shaped:
+
+- **Scoped to the business in the URL.** Items and menus are looked up by ID *and* tenant, so an ID of another business answers 404, as if it did not exist, instead of revealing it.
+- **Menu items are addressed by their catalog item** (`/items/{itemId}`), since a menu offers each item once (`uq_menu_item`).
+- **Every menu change answers with the whole menu** (`ManagedMenuDTO`), so the panel replaces its copy instead of patching it.
+- **Actions are endpoints of their own** (`/archive`, `/publish`) rather than a `PATCH` of a flag, because they have their own rules and, for publishing, no way back.
+
+### A menu's lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> DRAFT: create, or duplicate any menu
+    DRAFT --> DRAFT: reschedule, change items
+    DRAFT --> PUBLISHED: publish (needs an item)
+    DRAFT --> [*]: delete
+    PUBLISHED --> PUBLISHED: change items until its day passes
+```
+
+| Rule | Why |
+|---|---|
+| No menu is planned for, or changed on, a past date (`MENU_DATE_IN_PAST`), in the business's time zone | A past menu is history; orders (slice 4) will point at it |
+| Only drafts are rescheduled or deleted (`MENU_NOT_DRAFT`) | Customers may already plan around a published menu. A draft nobody saw can be deleted even after its date |
+| A published menu's items can still change | Stock runs out and prices get fixed during the day. Slice 4 will limit this once orders exist |
+| Publishing needs at least one item (`MENU_EMPTY`); publishing again changes nothing | An empty menu would only confuse customers; a retried request is harmless |
+| Duplicating copies the source's price and quantity, and leaves archived items out | The price last charged is a better start than the catalog's suggestion; an archived item could not be added by hand either. The source may be in the past: repeating yesterday's menu is the common case |
+| A catalog item is offered once per menu (`ITEM_ALREADY_IN_MENU`), never while archived (`ITEM_ARCHIVED`) | The unique constraint decides, so two concurrent requests cannot both add it |
+
+## Errors
 
 Errors follow [RFC 9457 Problem Details](https://www.rfc-editor.org/rfc/rfc9457) (`application/problem+json`) with a stable `code` the client translates:
 
@@ -117,7 +165,35 @@ Errors follow [RFC 9457 Problem Details](https://www.rfc-editor.org/rfc/rfc9457)
 }
 ```
 
-`ResourceNotFoundException` carries the code, and `GlobalExceptionHandler` builds the response. `detail` is for developers; users only see the translated `code`.
+`ResourceNotFoundException` and `BusinessRuleException` carry the code through static factories (`ResourceNotFoundException.menu(id)`), and `GlobalExceptionHandler` builds the response. `detail` is for developers; users only see the translated `code`.
+
+| Status | Codes | When |
+|---|---|---|
+| 400 | `VALIDATION_FAILED` | A request body breaks its Bean Validation constraints |
+| 400 | `MALFORMED_REQUEST` | The body is not JSON, or a value has the wrong type (text where a price goes) |
+| 404 | `BUSINESS_NOT_FOUND`, `ITEM_NOT_FOUND`, `MENU_NOT_FOUND`, `MENU_ITEM_NOT_FOUND` | Missing, or belonging to another business |
+| 422 | `INVALID_TIME_WINDOW`, `MENU_DATE_IN_PAST`, `MENU_NOT_DRAFT`, `MENU_EMPTY`, `ITEM_ARCHIVED`, `ITEM_ALREADY_IN_MENU` | A well-formed request that a business rule rejects ([lifecycle](#a-menus-lifecycle)) |
+
+Authentication and permission errors (401, 403) are in the [security guide](security.md#a-rejected-request).
+
+### Validation: two kinds of "no"
+
+- **Format, per field: Bean Validation, 400.** Request DTOs are records with constraints (`@NotBlank`, `@Size(max = 120)`, `@PositiveOrZero`, `@Digits(integer = 8, fraction = 2)`), whose limits match the columns, and controllers mark the body `@Valid`. Every invalid field is listed, with the constraint's name as its code, so a form shows a translated message next to each input:
+
+  ```json
+  {
+    "status": 400,
+    "code": "VALIDATION_FAILED",
+    "errors": [
+      { "field": "name", "code": "NotBlank" },
+      { "field": "suggestedPrice", "code": "PositiveOrZero" }
+    ]
+  }
+  ```
+
+- **Rules, across fields or against the database: the service, 422.** A window that ends before it starts, a date that has passed, publishing an empty menu. These need other fields, the clock or stored data, so they live in the service and throw `BusinessRuleException`. The database's `CHECK` constraints stay as a last line of defense; checking first in Java turns what would be a 500 into a code the client can translate.
+
+To add a rule: a factory method in `BusinessRuleException` with a new code, a test in the service's integration test, the code in this table, and its translation in the frontend's `apiErrors` catalogs when a screen can show it.
 
 ## Sample data
 
@@ -139,6 +215,9 @@ To add a business to the demo, add it to **both** seed files with the same item 
 | `WeeklyScheduleTest` | Opening rules: windows, exclusive closing time, split shifts, exceptions, next open day |
 | `BusinessServiceIntegrationTest` | Local opening status per business; which menus count as upcoming |
 | `MenuServiceIntegrationTest` | Menu items with the day's price; drafts are not found |
+| `CatalogServiceIntegrationTest` | Each business sees only its own items, archived ones included; text is trimmed |
+| `MenuManagementServiceIntegrationTest` | The menu rules above: past dates, drafts only, empty menus, duplicates, suggested prices, other businesses' IDs |
+| `GlobalExceptionHandlerTest` | Field errors with their constraint as code; unreadable bodies |
 | `TenantIntegrityIntegrationTest` | The composite foreign keys reject rows that mix businesses |
 | `AccountRepositoryIntegrationTest` | A user's businesses in one query, lowercase emails, one membership per user and business |
 | `BusinessControllerIntegrationTest` | The HTTP contract: local ISO dates, Problem Details |
