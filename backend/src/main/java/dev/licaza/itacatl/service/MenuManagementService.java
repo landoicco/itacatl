@@ -37,6 +37,43 @@ public interface MenuManagementService {
   @PreAuthorize("@businessAccess.canManage(authentication, #slug)")
   ManagedMenuDTO createDraft(String slug, MenuRequestDTO request);
 
+  /**
+   * A new draft for another service with the source's items, prices and quantities. The source may
+   * be in the past: repeating yesterday's menu is the common case. Items archived since then are
+   * left out, as they could not be added either.
+   *
+   * @throws dev.licaza.itacatl.exception.BusinessRuleException for the same reasons as {@link
+   *     #createDraft}
+   */
+  @PreAuthorize("@businessAccess.canManage(authentication, #slug)")
+  ManagedMenuDTO duplicate(String slug, Long menuId, MenuRequestDTO request);
+
+  /**
+   * Moves a draft to another date or window.
+   *
+   * @throws dev.licaza.itacatl.exception.BusinessRuleException if the menu is published, or for the
+   *     same reasons as {@link #createDraft}
+   */
+  @PreAuthorize("@businessAccess.canManage(authentication, #slug)")
+  ManagedMenuDTO reschedule(String slug, Long menuId, MenuRequestDTO request);
+
+  /**
+   * Shows the menu to customers. Publishing a published menu changes nothing.
+   *
+   * @throws dev.licaza.itacatl.exception.BusinessRuleException if the menu has no items or is in
+   *     the past
+   */
+  @PreAuthorize("@businessAccess.canManage(authentication, #slug)")
+  ManagedMenuDTO publish(String slug, Long menuId);
+
+  /**
+   * Deletes a draft with its items, whatever its date. Published menus stay as history.
+   *
+   * @throws dev.licaza.itacatl.exception.BusinessRuleException if the menu is published
+   */
+  @PreAuthorize("@businessAccess.canManage(authentication, #slug)")
+  void deleteDraft(String slug, Long menuId);
+
   /*
    * The menu's items. Published menus can change too, until orders exist (slice 4); past menus
    * cannot. Every change answers with the whole menu, so the panel replaces its copy.

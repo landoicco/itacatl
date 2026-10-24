@@ -43,6 +43,8 @@ Code: entities in `backend/src/main/java/dev/licaza/itacatl/domain/`, schema in 
 
 `item.archived` hides an item from the catalog while keeping past menus and orders meaningful. Deleting would either break foreign keys or lose history.
 
+So `fk_menu_item_item` has no cascade: deleting an item that a menu uses fails. It is checked at commit (`DEFERRABLE INITIALLY DEFERRED`) so that deleting a whole business still works: PostgreSQL cascades to its items and to its menus in separate steps, and a check right after the items would still see menu items that the menus' cascade removes next.
+
 ### Tenant integrity enforced by the database
 
 Every table owned by a business has `tenant_id` (the business's ID). Children reference their parents through **composite foreign keys**:

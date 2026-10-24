@@ -37,4 +37,15 @@ public class BusinessRuleException extends RuntimeException {
     return new BusinessRuleException(
         "ITEM_ALREADY_IN_MENU", "Item " + itemId + " is already in this menu");
   }
+
+  // Rescheduling and deleting are for drafts: customers may already be planning around a
+  // published menu
+  public static BusinessRuleException menuNotDraft(Long menuId) {
+    return new BusinessRuleException("MENU_NOT_DRAFT", "Menu " + menuId + " is already published");
+  }
+
+  public static BusinessRuleException menuEmpty(Long menuId) {
+    return new BusinessRuleException(
+        "MENU_EMPTY", "Menu " + menuId + " has no items; add one before publishing");
+  }
 }

@@ -85,18 +85,62 @@ public class MenuManagementDatabaseService implements MenuManagementService {
 
   @Override
   public ManagedMenuDTO createDraft(String slug, MenuRequestDTO request) {
-    Business business = business(slug);
-    checkWhen(business, request);
+    Menu menu = newDraft(business(slug), request);
+    log.info("✅ Draft menu {} created in {} for {}", menu.getId(), slug, menu.getServiceDate());
+    return toDTO(menu, List.of());
+  }
 
-    Menu menu = new Menu();
-    menu.setTenantId(business.getId());
+  @Override
+  public ManagedMenuDTO duplicate(String slug, Long menuId, MenuRequestDTO request) {
+    Business business = business(slug);
+    Menu source = menu(business, menuId);
+    Menu draft = newDraft(business, request);
+
+    List<MenuItem> copies =
+        menuItemRepository.findByMenuIdWithItem(source.getId()).stream()
+            .filter(menuItem -> !menuItem.getItem().isArchived())
+            .map(menuItem -> copy(menuItem, draft))
+            .toList();
+    menuItemRepository.saveAll(copies);
+    log.info(
+        "✅ Menu {} duplicated as draft {} in {} for {}",
+        source.getId(),
+        draft.getId(),
+        slug,
+        draft.getServiceDate());
+    return withItems(draft);
+  }
+
+  @Override
+  public ManagedMenuDTO reschedule(String slug, Long menuId, MenuRequestDTO request) {
+    Business business = business(slug);
+    Menu menu = draft(business, menuId);
+    checkWhen(business, request);
     menu.setServiceDate(request.serviceDate());
     menu.setStartsAt(request.startsAt());
     menu.setEndsAt(request.endsAt());
-    menu.setStatus(MenuStatus.DRAFT);
-    menu = menuRepository.save(menu);
-    log.info("✅ Draft menu {} created in {} for {}", menu.getId(), slug, menu.getServiceDate());
-    return toDTO(menu, List.of());
+    return withItems(menu);
+  }
+
+  @Override
+  public ManagedMenuDTO publish(String slug, Long menuId) {
+    Menu menu = changeableMenu(business(slug), menuId);
+    if (menu.getStatus() == MenuStatus.DRAFT) {
+      if (!menuItemRepository.existsByMenuId(menu.getId())) {
+        throw BusinessRuleException.menuEmpty(menu.getId());
+      }
+      menu.setStatus(MenuStatus.PUBLISHED);
+      log.info("✅ Menu {} published in {} for {}", menu.getId(), slug, menu.getServiceDate());
+    }
+    return withItems(menu);
+  }
+
+  @Override
+  public void deleteDraft(String slug, Long menuId) {
+    Menu menu = draft(business(slug), menuId);
+    // Its items go with it through the foreign key's ON DELETE CASCADE
+    menuRepository.delete(menu);
+    log.info("✅ Draft menu {} deleted in {}", menu.getId(), slug);
   }
 
   @Override
@@ -152,6 +196,36 @@ public class MenuManagementDatabaseService implements MenuManagementService {
       throw BusinessRuleException.menuDateInPast(menu.getServiceDate());
     }
     return menu;
+  }
+
+  private Menu draft(Business business, Long menuId) {
+    Menu menu = menu(business, menuId);
+    if (menu.getStatus() != MenuStatus.DRAFT) {
+      throw BusinessRuleException.menuNotDraft(menu.getId());
+    }
+    return menu;
+  }
+
+  private Menu newDraft(Business business, MenuRequestDTO request) {
+    checkWhen(business, request);
+    Menu menu = new Menu();
+    menu.setTenantId(business.getId());
+    menu.setServiceDate(request.serviceDate());
+    menu.setStartsAt(request.startsAt());
+    menu.setEndsAt(request.endsAt());
+    menu.setStatus(MenuStatus.DRAFT);
+    return menuRepository.save(menu);
+  }
+
+  // The source's price is kept rather than the catalog's: it is the price the owner last charged
+  private static MenuItem copy(MenuItem source, Menu menu) {
+    MenuItem copy = new MenuItem();
+    copy.setTenantId(menu.getTenantId());
+    copy.setMenu(menu);
+    copy.setItem(source.getItem());
+    copy.setPrice(source.getPrice());
+    copy.setQuantity(source.getQuantity());
+    return copy;
   }
 
   private MenuItem menuItem(Menu menu, Long itemId) {

@@ -110,6 +110,54 @@ class ManagedMenuControllerIntegrationTest {
   }
 
   @Test
+  void owner_PublishesAMenu_ThenPlansTheNextOneFromIt() throws Exception {
+    BrowserSession ana = BrowserSession.signIn(mockMvc, "ana@example.com", PASSWORD);
+    long menuId = createDraft(ana);
+    mockMvc
+        .perform(
+            post(MENUS + "/" + menuId + "/items")
+                .with(ana.cookies())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"itemId\": %d, \"quantity\": 30}".formatted(lime.getId())))
+        .andExpect(status().isOk());
+
+    mockMvc
+        .perform(post(MENUS + "/" + menuId + "/publish").with(ana.cookies()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("PUBLISHED"));
+
+    String body =
+        mockMvc
+            .perform(
+                post(MENUS + "/" + menuId + "/duplicate")
+                    .with(ana.cookies())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(window(tomorrow.plusDays(1), "12:00", "20:00")))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.status").value("DRAFT"))
+            .andExpect(jsonPath("$.items[0].name").value("Lime sorbet"))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    long copyId = json.readTree(body).get("id").asLong();
+
+    mockMvc
+        .perform(
+            put(MENUS + "/" + copyId)
+                .with(ana.cookies())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(window(tomorrow.plusDays(2), "09:00", "14:00")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.serviceDate").value(tomorrow.plusDays(2).toString()))
+        .andExpect(jsonPath("$.startsAt").value("09:00:00"));
+
+    mockMvc
+        .perform(delete(MENUS + "/" + copyId).with(ana.cookies()))
+        .andExpect(status().isNoContent());
+    mockMvc.perform(get(MENUS + "/" + copyId).with(ana.cookies())).andExpect(status().isNotFound());
+  }
+
+  @Test
   void staff_SeeDraftsButCannotChangeThem() throws Exception {
     long menuId = createDraft(BrowserSession.signIn(mockMvc, "ana@example.com", PASSWORD));
     BrowserSession luis = BrowserSession.signIn(mockMvc, "luis@example.com", PASSWORD);
@@ -126,6 +174,12 @@ class ManagedMenuControllerIntegrationTest {
                 .content("{\"itemId\": %d, \"quantity\": 30}".formatted(lime.getId())))
         .andExpect(status().isForbidden())
         .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    mockMvc
+        .perform(post(MENUS + "/" + menuId + "/publish").with(luis.cookies()))
+        .andExpect(status().isForbidden());
+    mockMvc
+        .perform(delete(MENUS + "/" + menuId).with(luis.cookies()))
+        .andExpect(status().isForbidden());
   }
 
   @Test
@@ -161,6 +215,11 @@ class ManagedMenuControllerIntegrationTest {
                         .formatted(tomorrow)))
         .andExpect(status().isUnprocessableContent())
         .andExpect(jsonPath("$.code").value("INVALID_TIME_WINDOW"));
+
+    mockMvc
+        .perform(post(MENUS + "/" + menuId + "/publish").with(ana.cookies()))
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(jsonPath("$.code").value("MENU_EMPTY"));
   }
 
   private long createDraft(BrowserSession owner) throws Exception {
@@ -170,16 +229,19 @@ class ManagedMenuControllerIntegrationTest {
                 post(MENUS)
                     .with(owner.cookies())
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content(
-                        """
-                        {"serviceDate": "%s", "startsAt": "12:00", "endsAt": "20:00"}
-                        """
-                            .formatted(tomorrow)))
+                    .content(window(tomorrow, "12:00", "20:00")))
             .andExpect(status().isCreated())
             .andReturn()
             .getResponse()
             .getContentAsString();
     return json.readTree(body).get("id").asLong();
+  }
+
+  private static String window(LocalDate date, String startsAt, String endsAt) {
+    return """
+        {"serviceDate": "%s", "startsAt": "%s", "endsAt": "%s"}
+        """
+        .formatted(date, startsAt, endsAt);
   }
 
   private void member(String email, Business business, MembershipRole role) {

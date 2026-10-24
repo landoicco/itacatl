@@ -23,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -41,6 +42,7 @@ class MenuManagementServiceIntegrationTest {
   @Autowired private ItemRepository itemRepository;
   @Autowired private MenuRepository menuRepository;
   @Autowired private MenuItemRepository menuItemRepository;
+  @Autowired private TestEntityManager entityManager;
 
   private Business sunny;
   private Business corner;
@@ -228,6 +230,142 @@ class MenuManagementServiceIntegrationTest {
             () -> menuService.removeItem("sunny-scoops", yesterday.getId(), lime.getId()));
 
     assertEquals("MENU_DATE_IN_PAST", ex.getCode());
+  }
+
+  @Test
+  void duplicate_OfAPastMenu_CopiesItsItemsIntoANewDraft_ArchivedItemsLeftOut() {
+    Item lime = itemRepository.save(item(sunny, "Lime sorbet", "40.00"));
+    Item old = item(sunny, "Old flavor", "30.00");
+    old.setArchived(true);
+    old = itemRepository.save(old);
+    Menu yesterday =
+        menuRepository.save(
+            menu(sunny, TODAY.minusDays(1), "12:00", "20:00", MenuStatus.PUBLISHED));
+    menuItemRepository.save(menuItem(yesterday, lime, "35.00", 30));
+    menuItemRepository.save(menuItem(yesterday, old, "30.00", 10));
+
+    ManagedMenuDTO copy =
+        menuService.duplicate("sunny-scoops", yesterday.getId(), request(TODAY, "13:00", "19:00"));
+
+    assertNotEquals(yesterday.getId(), copy.id());
+    assertEquals(MenuStatus.DRAFT, copy.status());
+    assertEquals(LocalTime.parse("13:00"), copy.startsAt());
+    assertEquals(1, copy.items().size());
+    // The price last charged, not the catalog's suggestion
+    assertEquals(0, new BigDecimal("35").compareTo(copy.items().getFirst().price()));
+    assertEquals(30, copy.items().getFirst().quantity());
+    assertEquals(2, menuItemRepository.findByMenuIdWithItem(yesterday.getId()).size());
+  }
+
+  @Test
+  void duplicate_ToAPastDate_IsRejected() {
+    Menu draft = menuRepository.save(menu(sunny, TODAY, "12:00", "20:00", MenuStatus.DRAFT));
+
+    BusinessRuleException ex =
+        assertThrows(
+            BusinessRuleException.class,
+            () ->
+                menuService.duplicate(
+                    "sunny-scoops", draft.getId(), request(TODAY.minusDays(1), "12:00", "20:00")));
+
+    assertEquals("MENU_DATE_IN_PAST", ex.getCode());
+  }
+
+  @Test
+  void reschedule_MovesADraft() {
+    Item lime = itemRepository.save(item(sunny, "Lime sorbet", "40.00"));
+    Menu draft = menuRepository.save(menu(sunny, TODAY, "12:00", "20:00", MenuStatus.DRAFT));
+    menuItemRepository.save(menuItem(draft, lime, "40.00", 30));
+
+    ManagedMenuDTO moved =
+        menuService.reschedule(
+            "sunny-scoops", draft.getId(), request(TODAY.plusDays(2), "09:00", "14:00"));
+
+    assertEquals(TODAY.plusDays(2), moved.serviceDate());
+    assertEquals(LocalTime.parse("14:00"), moved.endsAt());
+    assertEquals(1, moved.items().size());
+  }
+
+  @Test
+  void reschedule_APublishedMenu_IsRejected() {
+    Menu published =
+        menuRepository.save(menu(sunny, TODAY, "12:00", "20:00", MenuStatus.PUBLISHED));
+
+    BusinessRuleException ex =
+        assertThrows(
+            BusinessRuleException.class,
+            () ->
+                menuService.reschedule(
+                    "sunny-scoops", published.getId(), request(TODAY, "13:00", "20:00")));
+
+    assertEquals("MENU_NOT_DRAFT", ex.getCode());
+  }
+
+  @Test
+  void publish_ShowsTheMenu_AndAgainChangesNothing() {
+    Item lime = itemRepository.save(item(sunny, "Lime sorbet", "40.00"));
+    Menu draft = menuRepository.save(menu(sunny, TODAY, "12:00", "20:00", MenuStatus.DRAFT));
+    menuItemRepository.save(menuItem(draft, lime, "40.00", 30));
+
+    assertEquals(MenuStatus.PUBLISHED, menuService.publish("sunny-scoops", draft.getId()).status());
+    assertEquals(MenuStatus.PUBLISHED, menuService.publish("sunny-scoops", draft.getId()).status());
+  }
+
+  @Test
+  void publish_AnEmptyMenu_IsRejected() {
+    Menu draft = menuRepository.save(menu(sunny, TODAY, "12:00", "20:00", MenuStatus.DRAFT));
+
+    BusinessRuleException ex =
+        assertThrows(
+            BusinessRuleException.class, () -> menuService.publish("sunny-scoops", draft.getId()));
+
+    assertEquals("MENU_EMPTY", ex.getCode());
+  }
+
+  @Test
+  void publish_APastMenu_IsRejected() {
+    Item lime = itemRepository.save(item(sunny, "Lime sorbet", "40.00"));
+    Menu draft =
+        menuRepository.save(menu(sunny, TODAY.minusDays(1), "12:00", "20:00", MenuStatus.DRAFT));
+    menuItemRepository.save(menuItem(draft, lime, "40.00", 30));
+
+    BusinessRuleException ex =
+        assertThrows(
+            BusinessRuleException.class, () -> menuService.publish("sunny-scoops", draft.getId()));
+
+    assertEquals("MENU_DATE_IN_PAST", ex.getCode());
+  }
+
+  @Test
+  void deleteDraft_RemovesItWithItsItems_EvenInThePast() {
+    Item lime = itemRepository.save(item(sunny, "Lime sorbet", "40.00"));
+    Menu draft =
+        menuRepository.save(menu(sunny, TODAY.minusDays(1), "12:00", "20:00", MenuStatus.DRAFT));
+    menuItemRepository.save(menuItem(draft, lime, "40.00", 30));
+    // Like a new request: the menu item saved above must not linger in the persistence context,
+    // pointing at the deleted menu
+    entityManager.flush();
+    entityManager.clear();
+
+    menuService.deleteDraft("sunny-scoops", draft.getId());
+    entityManager.flush();
+
+    assertFalse(menuRepository.existsById(draft.getId()));
+    assertFalse(menuItemRepository.existsByMenuId(draft.getId()));
+    assertTrue(itemRepository.existsById(lime.getId()));
+  }
+
+  @Test
+  void deleteDraft_OfAPublishedMenu_IsRejected() {
+    Menu published =
+        menuRepository.save(menu(sunny, TODAY, "12:00", "20:00", MenuStatus.PUBLISHED));
+
+    BusinessRuleException ex =
+        assertThrows(
+            BusinessRuleException.class,
+            () -> menuService.deleteDraft("sunny-scoops", published.getId()));
+
+    assertEquals("MENU_NOT_DRAFT", ex.getCode());
   }
 
   private static MenuRequestDTO request(LocalDate date, String startsAt, String endsAt) {

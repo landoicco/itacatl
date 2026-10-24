@@ -48,6 +48,38 @@ public class ManagedMenuController {
     return ResponseEntity.status(HttpStatus.CREATED).body(menuService.createDraft(slug, request));
   }
 
+  // The body says when the copy is served; the source menu is not changed
+  @PostMapping("/{menuId}/duplicate")
+  public ResponseEntity<ManagedMenuDTO> duplicate(
+      @PathVariable String slug,
+      @PathVariable Long menuId,
+      @Valid @RequestBody MenuRequestDTO request) {
+    return ResponseEntity.status(HttpStatus.CREATED)
+        .body(menuService.duplicate(slug, menuId, request));
+  }
+
+  @PutMapping("/{menuId}")
+  public ResponseEntity<ManagedMenuDTO> reschedule(
+      @PathVariable String slug,
+      @PathVariable Long menuId,
+      @Valid @RequestBody MenuRequestDTO request) {
+    return ResponseEntity.ok(menuService.reschedule(slug, menuId, request));
+  }
+
+  // An action rather than a PATCH of the status: publishing has its own rules, and there is no
+  // way back to draft
+  @PostMapping("/{menuId}/publish")
+  public ResponseEntity<ManagedMenuDTO> publish(
+      @PathVariable String slug, @PathVariable Long menuId) {
+    return ResponseEntity.ok(menuService.publish(slug, menuId));
+  }
+
+  @DeleteMapping("/{menuId}")
+  public ResponseEntity<Void> deleteDraft(@PathVariable String slug, @PathVariable Long menuId) {
+    menuService.deleteDraft(slug, menuId);
+    return ResponseEntity.noContent().build();
+  }
+
   // Menu items are addressed by their catalog item: a menu offers each item once
   @PostMapping("/{menuId}/items")
   public ResponseEntity<ManagedMenuDTO> addItem(

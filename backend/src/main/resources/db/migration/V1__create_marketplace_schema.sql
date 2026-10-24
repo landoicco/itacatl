@@ -94,8 +94,11 @@ CREATE TABLE menu_item (
     version BIGINT NOT NULL DEFAULT 0,
     CONSTRAINT fk_menu_item_menu FOREIGN KEY (menu_id, tenant_id)
         REFERENCES menu (id, tenant_id) ON DELETE CASCADE,
+    -- No cascade: items are archived, never deleted. Checked at commit, because deleting a
+    -- business cascades to its items and its menus in separate steps, and a check right after the
+    -- items would still find the menu items that the menus' cascade is about to remove
     CONSTRAINT fk_menu_item_item FOREIGN KEY (item_id, tenant_id)
-        REFERENCES item (id, tenant_id),
+        REFERENCES item (id, tenant_id) DEFERRABLE INITIALLY DEFERRED,
     CONSTRAINT uq_menu_item UNIQUE (menu_id, item_id),
     CONSTRAINT ck_menu_item_price CHECK (price >= 0),
     CONSTRAINT ck_menu_item_quantity CHECK (quantity >= 0)
