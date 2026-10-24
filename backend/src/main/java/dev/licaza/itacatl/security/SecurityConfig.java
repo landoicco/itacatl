@@ -9,6 +9,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -32,6 +33,9 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
  */
 @Configuration
 @EnableWebSecurity
+// URL rules decide who is signed in; @PreAuthorize on services decides what they may do in each
+// business (BusinessAccess)
+@EnableMethodSecurity
 public class SecurityConfig {
 
   @Bean

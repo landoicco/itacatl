@@ -39,7 +39,8 @@ flowchart LR
 ```
 
 - **Controllers** only map HTTP to service calls. They depend on the service *interface*, so tests replace it with a mock (`@WebMvcTest`).
-- **Services** hold the use cases and their transactions (`@Transactional(readOnly = true)` for reads).
+- **Services** hold the use cases and their transactions (`@Transactional(readOnly = true)` for reads). Their interfaces also carry the permissions of the management API (`@PreAuthorize`), and their implementations the business rules that compare fields or need stored data.
+- **Validation** is split by kind: request DTOs declare per-field constraints that `@Valid` checks before the controller runs (400), and services enforce the rules (422). See [validation](domain-model.md#validation-two-kinds-of-no).
 - **Repositories** are Spring Data interfaces; queries that need care (fetch joins, time windows) are explicit JPQL.
 - **DTOs** are Java records. Entities never reach the JSON, so the API can stay stable while the schema evolves.
 - **Errors** become [RFC 9457 Problem Details](domain-model.md#errors) in one place, `GlobalExceptionHandler`, including the 401 and 403 answers of Spring Security's filters.
@@ -54,7 +55,9 @@ flowchart LR
 | Repository | `repo/` (Spring Data JPA) | Queries behind interfaces; derived queries for the simple ones |
 | Value objects | `TimeWindow`, `OpeningStatus` (records) | Immutable, validate themselves (`TimeWindow` rejects overnight windows) |
 | Functional core, imperative shell | `WeeklySchedule` (pure) used by `BusinessDatabaseService` (I/O) | The tricky rules are unit-tested with plain dates, no database |
-| Static factory methods | `ResourceNotFoundException.business(slug)`, `OpeningStatus.openUntil(…)` | Named constructors that keep codes and states consistent |
+| Static factory methods | `ResourceNotFoundException.business(slug)`, `BusinessRuleException.menuEmpty(id)`, `OpeningStatus.openUntil(…)` | Named constructors that keep codes and states consistent |
+| Declarative authorization (proxy) | `@PreAuthorize` on `CatalogService` and `MenuManagementService` | Permissions are part of the service's contract, checked before any caller reaches the method ([security](security.md#per-business-permissions-method-security)) |
+| Database as the arbiter | `uq_menu_item` decides a duplicate menu item; `DataIntegrityViolationException` becomes `ITEM_ALREADY_IN_MENU` | A check-then-insert in Java could be passed by two concurrent requests |
 | Dependency injection | Constructors everywhere, including `Clock` | Swappable collaborators; a frozen clock in tests |
 | Multi-tenancy by discriminator | `tenant_id` + composite foreign keys | One schema for every business; the database rejects cross-tenant rows |
 | Optimistic locking | `@Version` on menu items | Concurrent reservations of the last unit cannot both succeed (slice 4) |
@@ -118,7 +121,9 @@ components/, api/, theme/ or i18n/.
 | Level | Backend | Frontend |
 |---|---|---|
 | Unit | `WeeklyScheduleTest`: pure rules with fixed dates | Formatters, item colors, the API client with a stubbed `fetch` |
-| Integration | Services, repositories and the seeder against PostgreSQL in Testcontainers, with a fixed `Clock`; the sign-in flow over HTTP with the full application (`@SpringBootTest`) | Pages through the real routes, with the API faked by **MSW** at the network level |
+| Integration | Services, repositories and the seeder against PostgreSQL in Testcontainers, with a fixed `Clock`; the sign-in flow and the management API over HTTP with the full application (`@SpringBootTest`) and a real sign-in (`BrowserSession`) | Pages through the real routes, with the API faked by **MSW** at the network level |
 | Contract | `@WebMvcTest` with the real security rules: JSON shapes, date formats, Problem Details, public access | Catalog parity across locales |
 
 Both sides freeze time in tests: the backend injects a fixed `Clock`, the frontend fakes only `Date` (`vi.useFakeTimers({ toFake: ["Date"] })`) so promises and timers keep working.
+
+Full-application tests (`@SpringBootTest`) do not import `FixedClockConfig`: the application already has a `Clock` bean, so a second one fails the context. They inject the real `Clock` and compute dates from it, like `ManagedMenuControllerIntegrationTest` does for "tomorrow".

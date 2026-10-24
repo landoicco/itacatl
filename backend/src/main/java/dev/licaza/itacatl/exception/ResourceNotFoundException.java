@@ -25,7 +25,19 @@ public class ResourceNotFoundException extends RuntimeException {
     return new ResourceNotFoundException("ACCOUNT_NOT_FOUND", "No account with ID " + id);
   }
 
+  // Also for an item of another business: its ID is not revealed to exist
+  public static ResourceNotFoundException item(Long id) {
+    return new ResourceNotFoundException("ITEM_NOT_FOUND", "No item with ID " + id);
+  }
+
+  // The catalog item exists, but this menu does not offer it
+  public static ResourceNotFoundException menuItem(Long menuId, Long itemId) {
+    return new ResourceNotFoundException(
+        "MENU_ITEM_NOT_FOUND", "Menu " + menuId + " does not offer item " + itemId);
+  }
+
   public static ResourceNotFoundException menu(Long id) {
-    return new ResourceNotFoundException("MENU_NOT_FOUND", "No published menu with ID " + id);
+    // The public API answers this for drafts too, so customers cannot discover them
+    return new ResourceNotFoundException("MENU_NOT_FOUND", "No menu with ID " + id);
   }
 }

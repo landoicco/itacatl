@@ -1,6 +1,6 @@
 # Security
 
-How business owners and staff sign in, how their sessions are kept, and how the API protects them. This is the first use of **Spring Security** in the project, so the guide starts with the framework's concepts and then shows how each one is wired in here. Account tables are in the [domain model](domain-model.md); the decision to use sessions instead of JWT is [ADR 0004](adr/0004-server-side-sessions-instead-of-jwt.md).
+How business owners and staff sign in, how their sessions are kept, and how the API protects them. This is the first use of **Spring Security** in the project, so the guide starts with the framework's concepts and then shows how each one is wired in here, from the filter chain to the per-business permissions of the management API. Account tables are in the [domain model](domain-model.md); the decision to use sessions instead of JWT is [ADR 0004](adr/0004-server-side-sessions-instead-of-jwt.md).
 
 Customers have no account: they browse the public marketplace and, from slice 5, verify a phone number when they reserve ([product spec](product-spec.md#customer-identity)).
 
@@ -40,6 +40,7 @@ Writing this by hand (a filter that reads a cookie and checks a password) looks 
 | `PasswordEncoder` | Hashes and verifies passwords | `DelegatingPasswordEncoder` with bcrypt |
 | `AuthenticationEntryPoint` / `AccessDeniedHandler` | What to answer when a request needs a sign-in (401) or is forbidden (403) | Both hand the error to `GlobalExceptionHandler` |
 | `SessionAuthenticationStrategy` | What to do to the session when someone signs in | New session ID and new CSRF token |
+| Method security (`@PreAuthorize`) | An authorization check on a method instead of a URL, run by a proxy around the bean before the method | The service interfaces of the management API, with `BusinessAccess` |
 
 ### The filters that matter here
 
@@ -65,6 +66,8 @@ Spring Security prints the chain at startup with `logging.level.org.springframew
 | `security/AccountPrincipal.java` | The signed-in user kept in the session |
 | `security/SessionConfig.java` | Flags of the `SESSION` cookie |
 | `security/SessionLogin.java` | Signs a user in: checks the credentials, protects the session and stores the user in it |
+| `security/BusinessAccess.java` | Per-business permissions: may this user manage, or view, this business? |
+| `service/CatalogService.java`, `service/MenuManagementService.java` | `@PreAuthorize` on every method of the management API |
 | `controller/AuthController.java` | `POST /api/auth/login`, `GET /api/auth/me`. Only HTTP: sign-in goes to `SessionLogin`, the user's data to `AccountService` |
 | `exception/GlobalExceptionHandler.java` | Security errors as Problem Details with stable codes |
 | `db/migration/V2__create_accounts.sql` | `app_user` and `membership` |
@@ -92,7 +95,33 @@ Dependencies: `spring-boot-starter-security`, `spring-boot-starter-session-jdbc`
 
 An account (`app_user`) has no global role. What it can do depends on the business, so permissions come from its **memberships** (`OWNER` or `STAFF` per business), and `AccountPrincipal.getAuthorities()` is empty on purpose.
 
-Memberships are read from the database on each request that needs them (`GET /api/auth/me` today), not stored in the session. A membership that is removed takes effect on the next request, without waiting for the user to sign in again.
+Memberships are read from the database on each request that needs them (`GET /api/auth/me` and every management call), not stored in the session. A membership that is removed takes effect on the next request, without waiting for the user to sign in again.
+
+### Per-business permissions: method security
+
+The URL rules only know whether someone is signed in. Whether Ana may edit Sunny Scoops' menu depends on her membership in *that* business, so it is checked one level down, on the services, with **method security** (`@EnableMethodSecurity` on `SecurityConfig`):
+
+```java
+public interface MenuManagementService {
+
+  @PreAuthorize("@businessAccess.canView(authentication, #slug)")
+  ManagedMenuDTO getMenu(String slug, Long menuId);
+
+  @PreAuthorize("@businessAccess.canManage(authentication, #slug)")
+  ManagedMenuDTO publish(String slug, Long menuId);
+}
+```
+
+- **How it runs.** Spring wraps the service bean in a proxy. Before each call, the proxy evaluates the SpEL expression: `@businessAccess` is the `BusinessAccess` bean, `authentication` the current user and `#slug` the method's argument (readable by name because Spring Boot's Maven parent compiles with `-parameters`). `false` throws `AccessDeniedException`, which becomes `403 ACCESS_DENIED`.
+- **What it checks.** `canManage` is owners only; `canView` is owners and staff. Both ask the database whether the user has one of those roles in the business with that slug, in one `exists` query. Anonymous requests never get this far (the URL rules answer 401), and `BusinessAccess` still returns `false` for them.
+- **On the interface, not the controller.** The permission is part of the service's contract: any future caller (a scheduled job, a second controller) gets the same check, and the rule is next to the method's documentation.
+- **Then the data is scoped too.** Permission on the slug is not enough on its own: a menu ID could belong to another business. The services look every ID up together with the business (`findByIdAndTenantId`), so a foreign ID answers 404, not someone else's data. Slice 3 adds Row-Level Security as a third layer in the database.
+
+| Layer | Question | Answer when it fails |
+|---|---|---|
+| URL rules (`authorizeHttpRequests`) | Is someone signed in? | 401 `AUTHENTICATION_REQUIRED` |
+| Method security (`@PreAuthorize`) | Is this user an owner, or a member, of this business? | 403 `ACCESS_DENIED` |
+| Tenant-scoped queries | Does this ID belong to this business? | 404 `…_NOT_FOUND` |
 
 ## A request, step by step
 
@@ -150,7 +179,7 @@ Security errors happen inside filters, before Spring MVC, so `@RestControllerAdv
 | `AUTHENTICATION_REQUIRED` | 401 | An endpoint that needs a signed-in user, called without a session |
 | `INVALID_CREDENTIALS` | 401 | A failed sign-in: unknown email, wrong password or disabled account |
 | `CSRF_TOKEN_INVALID` | 403 | A state-changing request without a valid CSRF token |
-| `ACCESS_DENIED` | 403 | A signed-in user without permission |
+| `ACCESS_DENIED` | 403 | A signed-in user without that permission in the business: staff changing a menu, or anyone outside it |
 | `ACCOUNT_NOT_FOUND` | 404 | A session whose account was deleted |
 
 The client translates the code, as with every other API error ([i18n guide](i18n.md)). These codes join the frontend's catalogs with the screens that show them, in the owner panel (slice 2c); until then the client would fall back to its generic error message.
@@ -226,13 +255,16 @@ A page on another origin cannot read the cookie (same-origin policy), so it cann
 | A JSON `POST /api/auth/login` | `formLogin()` | `formLogin` expects a form post and answers with redirects and HTML, which a React app has to work around. The endpoint returns JSON and Problem Details; the cost is repeating three steps by hand (authenticate, session strategy, save the context), kept together in `SessionLogin` |
 | An explicit `AuthenticationManager` bean | The one Spring Security builds internally | The login endpoint calls it directly, and the wiring is visible in one place |
 | Per-business memberships | Global roles as authorities | One person can be the owner of one business and staff in another |
+| `@PreAuthorize` with a permission bean | Checks in each controller, or URL rules per business | Declarative and in one place per method; URL patterns cannot read memberships, and hand-written checks are easy to forget on a new endpoint |
+| A database query per check | Memberships cached in the session | Always current. One indexed `exists` per request is cheap at this scale |
 | No CORS | Allowing the frontend's origin | The app and the API share one origin everywhere (nginx locally, CloudFront in AWS, the Vite proxy in development). CORS with credentials would only add a way for another origin to use the session |
 | Security errors through `GlobalExceptionHandler` | Spring Security's default bodies | Every error has the same Problem Details shape and a code the client translates |
 
 ## Extending
 
 - **A new endpoint** under `/api` needs a signed-in user automatically. A public one must be added to the `permitAll` rules on purpose, with the narrowest method and path.
-- **A new role:** add it to `MembershipRole` and to the `ck_membership_role` constraint in a new migration.
+- **A new management operation:** take the business's `slug` as a parameter of the service method and annotate it with `canManage` or `canView`. Look up any ID with the business's ID as well, and add the role checks to the controller's integration test.
+- **A new role:** add it to `MembershipRole` and to the `ck_membership_role` constraint in a new migration, then decide in `BusinessAccess` what it may do.
 - **A stronger password algorithm:** change the default of the `DelegatingPasswordEncoder`. Old hashes keep verifying through their prefix; implementing `UserDetailsPasswordService` would rehash them as users sign in.
 - **Signing a user out everywhere:** Spring Session's `FindByIndexNameSessionRepository` finds every session of a principal (the indexed `principal_name` column), and deleting them ends those sessions.
 
@@ -251,10 +283,14 @@ A page on another origin cannot read the cookie (same-origin policy), so it cann
 | `BusinessControllerIntegrationTest` | Imports the real `SecurityConfig`, so the public read API is proven public |
 | `AccountRepositoryIntegrationTest` | Memberships per user, lowercase emails, one membership per user and business |
 | `MarketplaceSeederIntegrationTest` | Seeded accounts can sign in with the configured password |
+| `BusinessAccessIntegrationTest` | Owners manage and view, staff only view, nobody reaches another business, anonymous gets nothing |
+| `CatalogControllerIntegrationTest`, `ManagedMenuControllerIntegrationTest` | The management API over HTTP with real sign-in: the owner's flow, staff denied on changes, other owners denied, rule errors as 422 |
+
+The HTTP tests sign in through `BrowserSession`, a test helper that does what the browser does: it fetches the `XSRF-TOKEN` cookie, posts the credentials, and sends both cookies and the token header on every later request.
 
 ## Gotchas
 
-- **Do not use spring-security-test's `csrf()` with `csrf.spa()`.** It swaps the filter's cookie repository for a session-based one, for the rest of the shared test context, and sends an XOR-masked token that the SPA handler compares as raw. `AuthControllerIntegrationTest` gets the cookie and sends it back in the header, like the browser.
+- **Do not use spring-security-test's `csrf()` with `csrf.spa()`.** It swaps the filter's cookie repository for a session-based one, for the rest of the shared test context, and sends an XOR-masked token that the SPA handler compares as raw. `BrowserSession` gets the cookie and sends it back in the header, like the browser.
 - **Session cookie flags depend on the container unless declared.** Without `SessionConfig`, Spring Session copies them from the servlet context, and in MockMvc the cookie had neither `HttpOnly` nor `SameSite`.
 - **Changing `AccountPrincipal` can invalidate existing sessions,** because they hold it serialized. Keep it small and bump `serialVersionUID` on purpose.
 - **Debugging a 401 or 403:** `logging.level.org.springframework.security=DEBUG` logs the chain at startup and why each request was rejected (for example, "Invalid CSRF token found").
@@ -287,3 +323,9 @@ Nothing changes: sessions are in PostgreSQL, so any instance can serve any reque
 
 **Why is authorization not in the session?**
 Permissions depend on the business, and they can change. Reading memberships per request means a removed membership takes effect immediately.
+
+**Why method security instead of URL rules for the management API?**
+A URL rule can say "signed in", but not "owner of the business in this path": that needs the database. `@PreAuthorize` on the service interface runs a permission bean with the method's arguments, so the rule sits next to the operation and protects it whoever calls it.
+
+**Why 404 for another business's menu, but 403 for another business's slug?**
+The slug is public: every business is on the marketplace, so saying "you may not" reveals nothing. Internal IDs are not, and a 403 would confirm that a menu with that ID exists somewhere. The scoped lookup answers as if it did not.
