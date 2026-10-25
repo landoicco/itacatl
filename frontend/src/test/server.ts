@@ -9,6 +9,7 @@ import type {
   ManagedMenu,
   MenuDetail,
   MenuWindow,
+  UpdateMenuItemRequest,
 } from "@/api/types";
 import { todayIn } from "@/i18n/format";
 
@@ -270,6 +271,18 @@ function newMenu(when: MenuWindow, items: ManagedMenu["items"]) {
 
 const findMenu = (id: unknown) => managedMenus.find((menu) => menu.id === Number(id));
 
+// A change to a menu's items: allowed to owners until the menu has ended. Answers the whole menu
+function changeMenu(
+  params: { slug?: unknown; id?: unknown },
+  change: (menu: ManagedMenu) => Response | void
+) {
+  const menu = findMenu(params.id);
+  if (!menu) return notFound("MENU_NOT_FOUND");
+  const rejected =
+    denied(params.slug, true) ?? (menu.serviceDate < todayIn(ZONE) ? rule("MENU_ENDED") : null);
+  return rejected ?? change(menu) ?? HttpResponse.json(menu);
+}
+
 function changeItem(id: unknown, change: Partial<CatalogItem>) {
   const item = catalog.find((candidate) => candidate.id === Number(id));
   if (!item) return notFound("ITEM_NOT_FOUND");
@@ -353,6 +366,41 @@ export const handlers = [
     managedMenus = managedMenus.filter(({ id }) => id !== menu.id);
     return new HttpResponse(null, { status: 204 });
   }),
+  http.get(`${MENUS}/:id`, ({ params }) => {
+    const menu = findMenu(params.id);
+    return (
+      denied(params.slug, false) ?? (menu ? HttpResponse.json(menu) : notFound("MENU_NOT_FOUND"))
+    );
+  }),
+  http.put(`${MENUS}/:id`, async ({ params, request }) => {
+    const when = (await request.json()) as MenuWindow;
+    const menu = findMenu(params.id);
+    if (!menu) return notFound("MENU_NOT_FOUND");
+    const rejected =
+      denied(params.slug, true) ??
+      (menu.status === "DRAFT" ? null : rule("MENU_NOT_DRAFT")) ??
+      invalidWindow(when);
+    if (rejected) return rejected;
+    Object.assign(menu, {
+      serviceDate: when.serviceDate,
+      startsAt: `${when.startsAt}:00`,
+      endsAt: `${when.endsAt}:00`,
+    });
+    return HttpResponse.json(menu);
+  }),
+  http.put(`${MENUS}/:id/items/:itemId`, async ({ params, request }) => {
+    const change = (await request.json()) as UpdateMenuItemRequest;
+    return changeMenu(params, (menu) => {
+      const item = menu.items.find(({ itemId }) => itemId === Number(params.itemId));
+      if (!item) return notFound("MENU_ITEM_NOT_FOUND");
+      Object.assign(item, change);
+    });
+  }),
+  http.delete(`${MENUS}/:id/items/:itemId`, ({ params }) =>
+    changeMenu(params, (menu) => {
+      menu.items = menu.items.filter(({ itemId }) => itemId !== Number(params.itemId));
+    })
+  ),
   http.get("/api/businesses", () => HttpResponse.json(shops)),
   http.get("/api/businesses/:slug", ({ params }) =>
     params.slug === "sunny-scoops" ? HttpResponse.json(sunnyDetail) : notFound("BUSINESS_NOT_FOUND")

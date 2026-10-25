@@ -116,7 +116,23 @@
       "opens": "Abre",
       "closes": "Cierra",
       "createDraft": "Crear borrador",
-      "saving": "Guardando…"
+      "saving": "Guardando…",
+      "save": "Guardar"
+    },
+    "editor": {
+      "change": "Cambiar fecha y hora",
+      "hidden": "Los clientes aún no ven este menú.",
+      "ended": "Este menú ya terminó. Queda como historial y no se puede cambiar.",
+      "noItems": "Este menú aún no tiene productos.",
+      "archived": "Archivado",
+      "archivedNote": "Archivado en el catálogo. Quítalo si ya no lo preparas.",
+      "remove": "Quitar {{name}}",
+      "price": "Precio de {{name}}",
+      "quantity": "Porciones de {{name}}",
+      "less": "Una porción menos de {{name}}",
+      "more": "Una porción más de {{name}}",
+      "portions_one": "{{count}} porción",
+      "portions_other": "{{count}} porciones"
     }
   },
   "sheet": {

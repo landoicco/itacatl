@@ -9,6 +9,7 @@ The screens where business owners and staff manage their catalog and menus, unde
 | `/login?next=<path>` | Sign-in; afterwards goes to `next`, or `/manage` | Anyone |
 | `/manage` | Business picker; skipped when the account has one business | Signed in |
 | `/manage/:slug/menus` | Menus from today on, by day, drafts included; owners create, duplicate, publish and delete drafts | Members of the business |
+| `/manage/:slug/menus/:menuId` | One menu: price and portions of each item, sold out, remove, reschedule a draft, publish | Members of the business |
 | `/manage/:slug/catalog` | The catalog: search, archived items folded at the end; owners create, edit, archive and unarchive | Members of the business |
 
 The panel is mobile-first: owners update their menu from a phone during the day.
@@ -30,7 +31,7 @@ The panel is mobile-first: owners update their menu from a phone during the day.
 | `features/auth/` | The sign-in page |
 | `features/account/` | The business picker |
 | `features/catalog/` | The catalog page and the item form |
-| `features/menus/` | The menu list and the sheet for a menu's date and window |
+| `features/menus/` | The menu list, the menu editor, the sheet for a menu's date and window, and their date helpers (`menuDates.ts`) |
 
 ## Talking to the API
 
@@ -114,6 +115,24 @@ Inputs are controlled, so the values survive a rejected save. A form is mounted 
 
 The sheet's form takes an `onSubmit` that returns a promise (`mutateAsync`), so one form serves creating and duplicating, and closes only once the save succeeds.
 
+## The menu editor
+
+`MenuEditorPage` shows one menu and lets the owner change it in place, without a Save button: each change is one request.
+
+- **Price saves when the field loses focus; portions save with every tap** of − or +, and when the field loses focus after typing. "Sold out" sets the portions to 0 in one tap, the most common change during a service.
+- **Rescheduling** opens the same `MenuWindowSheet` as a new menu, prefilled with the menu's window, and is only offered on drafts (`MENU_NOT_DRAFT`). Publishing is offered in the draft's banner.
+- **An ended menu is shown as history**, without controls: `hasEnded()` (`menuDates.ts`) compares the menu's date and closing time with the current time in the business's zone, the same rule as the backend's `MENU_ENDED`. The backend still refuses changes; the screen just does not offer them.
+- **Archived items** stay in the menu, struck through with a note, so the owner decides whether to remove them ([why](domain-model.md#a-menus-lifecycle)).
+
+### Quick taps, in order
+
+Three quick taps on + send three `PUT`s. Without care, they could reach the server, or come back, out of order, and an older answer would overwrite a newer one. Two pieces prevent it:
+
+1. **The mutations of one menu share a TanStack Query scope** (`scope: { id: "menu:<slug>:<id>" }` in `useMenuMutation`), so they run one after another: the second request starts when the first has answered. The backend's row lock serializes them too ([domain model](domain-model.md#concurrent-changes-to-one-menu)), but only the client can keep the answers in order.
+2. **Each row keeps what its inputs show** and follows the cache only when none of its saves is pending. Mid-way, an answer carries the values of an earlier tap and would make the field jump back. The row compares a new value with the last one it sent, not with the last answer, so "+ then −" sends both changes.
+
+When a save fails, the row forgets what it sent and returns to the saved values, and the error is shown above the items.
+
 ## The panel's frame
 
 `ManageLayout` renders one business's panel:
@@ -143,6 +162,9 @@ Staff see the same screens without the buttons that change anything: `useMembers
 | Hiding owner-only buttons from staff | Showing them disabled | Staff never need them; the API refuses the calls either way |
 | The business's time zone from its public profile | Adding it to the session's memberships | The profile is already a cached query; the session stays small and unchanged |
 | Menu window rules checked only by the backend | Repeating them in the form | "Ended" depends on the business's clock and zone; the backend's codes are translated in the sheet |
+| Saving each change on its own | A Save button for the whole menu | Changes during a service are one at a time ("sold out"), and an unsaved form is easy to lose on a phone |
+| Serial mutations per menu (TanStack Query scope) | Parallel requests, or disabling the controls while saving | Answers arrive in the order of the taps, and the owner can keep tapping |
+| Rows that follow the server only when no save is pending | Remounting the row on every answer | No jumping values mid-way, and the input keeps its focus |
 | `confirm()` before deleting a draft | A custom confirmation sheet | It is the only irreversible action, and the native dialog is accessible and familiar on phones |
 
 ## Extending
@@ -165,11 +187,13 @@ Pages are tested through the real routes with the API faked by MSW (`test/server
 |---|---|
 | `api/client.test.ts` | CSRF header on changes and not on reads, empty 204, field errors, no session as `null` |
 | `features/auth/SignInPage.test.tsx` | The redirect to sign-in and back, one message for wrong credentials, the single-business shortcut, a `next` link to another site ignored |
+| `features/menus/MenuEditorPage.test.tsx` | Publishing a draft, three taps saved in order, price on blur and sold out, a rejected change put back, removing, rescheduling, an ended menu without controls, staff read-only |
 | `features/menus/MenusPage.test.tsx` | Days in the business's zone, publishing and `MENU_EMPTY`, duplicating to the next day, a rule error kept in the sheet, deleting after confirming, staff without actions |
 | `features/catalog/CatalogPage.test.tsx` | The catalog, search without accents, creating with a rejected field, editing, archiving; the switcher, the tabs, staff without buttons, a foreign business, an expired session, signing out |
 
 ## Gotchas
 
 - **TanStack Query skips `mutate()` callbacks once the component unmounts.** The callbacks given to `useMutation` itself always run. That is why sign-out navigates before signing out instead of in `onSuccess`.
+- **An input's name comes from all of its `<label>`'s text**, decoration included. The price input is named with `aria-label`, so the "$" next to it is not part of its name.
 - **jsdom has no `showModal()`.** `test/setup.ts` replaces it with a stub that only sets `open`, which is all the tests need.
 - **The first render of a test file is slow** when every file runs in parallel, as in CI, because it also loads the file's modules. `findBy*` waits up to 3 seconds (`asyncUtilTimeout` in `test/setup.ts`) instead of 1.

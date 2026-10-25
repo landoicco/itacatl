@@ -15,8 +15,9 @@ import { useMembership } from "@/api/session";
 import type { ManagedMenu, MenuWindow } from "@/api/types";
 import ErrorMessage from "@/components/ErrorMessage";
 import SkeletonCards from "@/components/SkeletonCards";
-import { daysBetween, formatShortDate, formatTime, todayIn } from "@/i18n/format";
+import { formatTime, todayIn } from "@/i18n/format";
 import { flavorColor } from "@/theme/flavorColor";
+import { addDays, hhmm, laterOf, useDayLabel } from "./menuDates";
 import MenuWindowSheet from "./MenuWindowSheet";
 
 // The sheet on screen: a new menu, or a duplicate of one
@@ -24,30 +25,19 @@ type SheetState = { kind: "new" } | { kind: "duplicate"; source: ManagedMenu } |
 
 const SHOWN_SCOOPS = 8;
 
-// "2026-10-17" plus n days, as a local date: computed in UTC so no time zone shifts it
-function addDays(date: string, days: number): string {
-  const [year, month, day] = date.split("-").map(Number);
-  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
-}
-
-// ISO dates compare as text
-const laterOf = (a: string, b: string) => (a > b ? a : b);
-
-// The API sends "12:00:00"; <input type="time"> shows and returns "12:00"
-const hhmm = (time: string) => time.slice(0, 5);
-
 /**
  * A business's menus from today on, by day, drafts included. Owners create, duplicate, publish
  * and delete drafts here; the menu's items are edited on its own page.
  */
 export default function MenusPage() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { slug = "" } = useParams();
   const canManage = useMembership(slug)?.role === "OWNER";
   const [sheet, setSheet] = useState<SheetState>(null);
   const menus = useManagedMenus(slug);
   // The public profile has the business's time zone, which "today" and "tomorrow" depend on
   const business = useBusiness(slug);
+  const dayLabel = useDayLabel(business.data?.timeZone);
   const create = useCreateMenu(slug);
   const duplicate = useDuplicateMenu(slug);
   const publish = usePublishMenu(slug);
@@ -63,14 +53,6 @@ export default function MenusPage() {
 
   const today = todayIn(business.data.timeZone);
   const actionError = publish.error ?? remove.error;
-
-  const dayLabel = (date: string) => {
-    const days = daysBetween(today, date);
-    const short = formatShortDate(date, i18n.language);
-    if (days === 0) return `${t("shop.today")} · ${short}`;
-    if (days === 1) return `${t("shop.tomorrow")} · ${short}`;
-    return short;
-  };
 
   // Menus arrive sorted by date and start time; a Map keeps that order per day
   const days = menus.data.reduce((byDay, menu) => {

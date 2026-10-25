@@ -59,11 +59,20 @@ function useCatalogMutation<Args>(slug: string, mutationFn: (args: Args) => Prom
   });
 }
 
-/** A change that answers with one menu */
-function useMenuMutation<Args>(slug: string, mutationFn: (args: Args) => Promise<ManagedMenu>) {
+/**
+ * A change that answers with one menu. Changes to the same menu (`menuId`) share a scope, so
+ * TanStack Query runs them one after another: three quick taps on "+" reach the server, and come
+ * back, in order, and an older answer never overwrites a newer one in the cache.
+ */
+function useMenuMutation<Args>(
+  slug: string,
+  mutationFn: (args: Args) => Promise<ManagedMenu>,
+  menuId?: number
+) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn,
+    scope: menuId === undefined ? undefined : { id: `menu:${slug}:${menuId}` },
     onSuccess: (menu) => storeMenu(queryClient, slug, menu),
   });
 }
@@ -91,21 +100,24 @@ export const useDuplicateMenu = (slug: string) =>
   );
 
 export const useRescheduleMenu = (slug: string, menuId: number) =>
-  useMenuMutation(slug, (window: MenuWindow) => api.rescheduleMenu(slug, menuId, window));
+  useMenuMutation(slug, (window: MenuWindow) => api.rescheduleMenu(slug, menuId, window), menuId);
 
 export const usePublishMenu = (slug: string) =>
   useMenuMutation(slug, (menuId: number) => api.publishMenu(slug, menuId));
 
 export const useAddMenuItem = (slug: string, menuId: number) =>
-  useMenuMutation(slug, (item: AddMenuItemRequest) => api.addMenuItem(slug, menuId, item));
+  useMenuMutation(slug, (item: AddMenuItemRequest) => api.addMenuItem(slug, menuId, item), menuId);
 
 export const useUpdateMenuItem = (slug: string, menuId: number) =>
-  useMenuMutation(slug, ({ itemId, item }: { itemId: number; item: UpdateMenuItemRequest }) =>
-    api.updateMenuItem(slug, menuId, itemId, item)
+  useMenuMutation(
+    slug,
+    ({ itemId, item }: { itemId: number; item: UpdateMenuItemRequest }) =>
+      api.updateMenuItem(slug, menuId, itemId, item),
+    menuId
   );
 
 export const useRemoveMenuItem = (slug: string, menuId: number) =>
-  useMenuMutation(slug, (itemId: number) => api.removeMenuItem(slug, menuId, itemId));
+  useMenuMutation(slug, (itemId: number) => api.removeMenuItem(slug, menuId, itemId), menuId);
 
 export function useDeleteMenu(slug: string) {
   const queryClient = useQueryClient();

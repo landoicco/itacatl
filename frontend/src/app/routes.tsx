@@ -6,6 +6,7 @@ import { queryKeys } from "@/api/queries";
 import BusinessPickerPage from "@/features/account/BusinessPickerPage";
 import SignInPage from "@/features/auth/SignInPage";
 import CatalogPage from "@/features/catalog/CatalogPage";
+import MenuEditorPage from "@/features/menus/MenuEditorPage";
 import MenusPage from "@/features/menus/MenusPage";
 import ShopListPage from "@/features/shops/ShopListPage";
 import ShopPage from "@/features/menu/ShopPage";
@@ -40,6 +41,7 @@ export const routes: RouteObject[] = [
             children: [
               { index: true, element: <Navigate to="menus" replace /> },
               { path: "menus", element: <MenusPage /> },
+              { path: "menus/:menuId", element: <MenuEditorPage /> },
               { path: "catalog", element: <CatalogPage /> },
             ],
           },

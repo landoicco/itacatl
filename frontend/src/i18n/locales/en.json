@@ -116,7 +116,23 @@
       "opens": "Opens",
       "closes": "Closes",
       "createDraft": "Create draft",
-      "saving": "Saving…"
+      "saving": "Saving…",
+      "save": "Save"
+    },
+    "editor": {
+      "change": "Change date and time",
+      "hidden": "Customers can't see this menu yet.",
+      "ended": "This menu has ended. It stays as history and can't be changed.",
+      "noItems": "No items in this menu yet.",
+      "archived": "Archived",
+      "archivedNote": "Archived in the catalog. Remove it if you no longer make it.",
+      "remove": "Remove {{name}}",
+      "price": "Price of {{name}}",
+      "quantity": "Portions of {{name}}",
+      "less": "One portion less of {{name}}",
+      "more": "One more portion of {{name}}",
+      "portions_one": "{{count}} portion",
+      "portions_other": "{{count}} portions"
     }
   },
   "sheet": {
