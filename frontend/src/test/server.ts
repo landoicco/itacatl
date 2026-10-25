@@ -6,8 +6,11 @@ import type {
   CatalogItem,
   CurrentUser,
   ItemRequest,
+  ManagedMenu,
   MenuDetail,
+  MenuWindow,
 } from "@/api/types";
+import { todayIn } from "@/i18n/format";
 
 /*
  * A fake API for component tests. MSW intercepts the real fetch calls, so tests exercise the
@@ -172,6 +175,38 @@ const SUNNY_CATALOG: CatalogItem[] = [
 // starts signed out with the original data (setup.ts calls resetServerState after each one)
 let session: CurrentUser | null = null;
 let catalog: CatalogItem[] = [];
+let managedMenus: ManagedMenu[] = [];
+
+// Sunny Scoops' menus from today (Saturday 17) on, as the management API lists them
+const SUNNY_MENUS: ManagedMenu[] = [
+  {
+    id: 201,
+    serviceDate: "2026-10-17",
+    startsAt: "11:00:00",
+    endsAt: "21:00:00",
+    status: "PUBLISHED",
+    items: [
+      { itemId: 101, name: "Lime sorbet", price: 40, quantity: 30, archived: false },
+      { itemId: 102, name: "Maracuyá sorbet", price: 45, quantity: 0, archived: false },
+    ],
+  },
+  {
+    id: 202,
+    serviceDate: "2026-10-18",
+    startsAt: "12:00:00",
+    endsAt: "20:00:00",
+    status: "DRAFT",
+    items: [{ itemId: 101, name: "Lime sorbet", price: 40, quantity: 20, archived: false }],
+  },
+  {
+    id: 203,
+    serviceDate: "2026-10-21",
+    startsAt: "12:00:00",
+    endsAt: "20:00:00",
+    status: "DRAFT",
+    items: [],
+  },
+];
 
 export const signInAs = (email: string | null) => {
   session = email ? accounts[email] : null;
@@ -180,6 +215,7 @@ export const signInAs = (email: string | null) => {
 export function resetServerState() {
   session = null;
   catalog = SUNNY_CATALOG.map((item) => ({ ...item }));
+  managedMenus = structuredClone(SUNNY_MENUS);
 }
 resetServerState();
 
@@ -203,6 +239,36 @@ function invalidItem(item: ItemRequest) {
 
 const ITEMS = "/api/manage/businesses/:slug/items";
 const catalogOf = (slug: unknown) => (slug === "sunny-scoops" ? catalog : []);
+
+const MENUS = "/api/manage/businesses/:slug/menus";
+const rule = (code: string) => problem(422, code);
+
+// The menu rules that the screens show: a window that ends after it starts and has not ended.
+// "Ended" is simplified to a past date; the clock is frozen at 11:30 on the 17th
+function invalidWindow({ serviceDate, startsAt, endsAt }: MenuWindow) {
+  if (endsAt <= startsAt) return rule("INVALID_TIME_WINDOW");
+  if (serviceDate < todayIn(ZONE)) return rule("MENU_ENDED");
+  return null;
+}
+
+function newMenu(when: MenuWindow, items: ManagedMenu["items"]) {
+  const menu: ManagedMenu = {
+    id: Math.max(...managedMenus.map(({ id }) => id)) + 1,
+    serviceDate: when.serviceDate,
+    // The backend answers times with seconds
+    startsAt: `${when.startsAt}:00`,
+    endsAt: `${when.endsAt}:00`,
+    status: "DRAFT",
+    items,
+  };
+  managedMenus.push(menu);
+  managedMenus.sort((a, b) =>
+    (a.serviceDate + a.startsAt).localeCompare(b.serviceDate + b.startsAt)
+  );
+  return HttpResponse.json(menu, { status: 201 });
+}
+
+const findMenu = (id: unknown) => managedMenus.find((menu) => menu.id === Number(id));
 
 function changeItem(id: unknown, change: Partial<CatalogItem>) {
   const item = catalog.find((candidate) => candidate.id === Number(id));
@@ -251,6 +317,42 @@ export const handlers = [
     `${ITEMS}/:id/unarchive`,
     ({ params }) => denied(params.slug, true) ?? changeItem(params.id, { archived: false })
   ),
+  http.get(
+    MENUS,
+    ({ params }) =>
+      denied(params.slug, false) ??
+      HttpResponse.json(params.slug === "sunny-scoops" ? managedMenus : [])
+  ),
+  http.post(MENUS, async ({ params, request }) => {
+    const when = (await request.json()) as MenuWindow;
+    return denied(params.slug, true) ?? invalidWindow(when) ?? newMenu(when, []);
+  }),
+  http.post(`${MENUS}/:id/duplicate`, async ({ params, request }) => {
+    const when = (await request.json()) as MenuWindow;
+    const source = findMenu(params.id);
+    if (!source) return notFound("MENU_NOT_FOUND");
+    const items = source.items.filter((item) => !item.archived).map((item) => ({ ...item }));
+    return denied(params.slug, true) ?? invalidWindow(when) ?? newMenu(when, items);
+  }),
+  http.post(`${MENUS}/:id/publish`, ({ params }) => {
+    const menu = findMenu(params.id);
+    if (!menu) return notFound("MENU_NOT_FOUND");
+    const rejected =
+      denied(params.slug, true) ??
+      (menu.status === "DRAFT" && menu.items.length === 0 ? rule("MENU_EMPTY") : null);
+    if (rejected) return rejected;
+    menu.status = "PUBLISHED";
+    return HttpResponse.json(menu);
+  }),
+  http.delete(`${MENUS}/:id`, ({ params }) => {
+    const menu = findMenu(params.id);
+    if (!menu) return notFound("MENU_NOT_FOUND");
+    const rejected =
+      denied(params.slug, true) ?? (menu.status === "DRAFT" ? null : rule("MENU_NOT_DRAFT"));
+    if (rejected) return rejected;
+    managedMenus = managedMenus.filter(({ id }) => id !== menu.id);
+    return new HttpResponse(null, { status: 204 });
+  }),
   http.get("/api/businesses", () => HttpResponse.json(shops)),
   http.get("/api/businesses/:slug", ({ params }) =>
     params.slug === "sunny-scoops" ? HttpResponse.json(sunnyDetail) : notFound("BUSINESS_NOT_FOUND")

@@ -93,6 +93,32 @@
       "saving": "Guardando…"
     }
   },
+  "menus": {
+    "title": "Menús",
+    "newMenu": "Nuevo menú",
+    "empty": "No hay menús de hoy en adelante.",
+    "published": "Publicado",
+    "draft": "Borrador",
+    "items_one": "{{count}} producto",
+    "items_other": "{{count}} productos",
+    "soldOut_one": "{{count}} agotado",
+    "soldOut_other": "{{count}} agotados",
+    "hidden": "los clientes aún no lo ven",
+    "emptyMenu": "Vacío · agrega productos antes de publicar",
+    "publish": "Publicar",
+    "duplicate": "Duplicar",
+    "delete": "Borrar",
+    "confirmDelete": "¿Borrar el borrador del {{day}}? Esto no se puede deshacer.",
+    "duplicateTitle": "Duplicar el menú del {{day}}",
+    "duplicateHint": "Copia sus productos con sus precios y cantidades. Los archivados se quedan fuera.",
+    "form": {
+      "date": "Fecha",
+      "opens": "Abre",
+      "closes": "Cierra",
+      "createDraft": "Crear borrador",
+      "saving": "Guardando…"
+    }
+  },
   "sheet": {
     "close": "Cerrar"
   },

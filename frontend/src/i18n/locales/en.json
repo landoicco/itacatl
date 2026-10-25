@@ -93,6 +93,32 @@
       "saving": "Saving…"
     }
   },
+  "menus": {
+    "title": "Menus",
+    "newMenu": "New menu",
+    "empty": "No menus from today on.",
+    "published": "Published",
+    "draft": "Draft",
+    "items_one": "{{count}} item",
+    "items_other": "{{count}} items",
+    "soldOut_one": "{{count}} sold out",
+    "soldOut_other": "{{count}} sold out",
+    "hidden": "not visible to customers",
+    "emptyMenu": "Empty · add items before publishing",
+    "publish": "Publish",
+    "duplicate": "Duplicate",
+    "delete": "Delete",
+    "confirmDelete": "Delete the draft for {{day}}? This cannot be undone.",
+    "duplicateTitle": "Duplicate the menu of {{day}}",
+    "duplicateHint": "Copies its items with their prices and quantities. Archived items are left out.",
+    "form": {
+      "date": "Date",
+      "opens": "Opens",
+      "closes": "Closes",
+      "createDraft": "Create draft",
+      "saving": "Saving…"
+    }
+  },
   "sheet": {
     "close": "Close"
   },
