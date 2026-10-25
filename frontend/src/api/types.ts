@@ -1,4 +1,4 @@
-// Mirrors the backend's DTOs (docs/domain-model.md#public-read-api).
+// Mirrors the backend's DTOs (docs/domain-model.md#public-read-api and #management-api).
 // Dates and times are local to the business, without an offset: "2026-10-17T12:00:00".
 
 export type DayOfWeek =
@@ -62,4 +62,91 @@ export interface MenuDetail {
   startsAt: string;
   endsAt: string;
   items: MenuItem[];
+}
+
+// Accounts (docs/security.md)
+
+export type MembershipRole = "OWNER" | "STAFF";
+
+export interface Membership {
+  slug: string;
+  name: string;
+  role: MembershipRole;
+}
+
+export interface CurrentUser {
+  email: string;
+  name: string;
+  /** Sorted by name */
+  businesses: Membership[];
+}
+
+export interface SignInRequest {
+  email: string;
+  password: string;
+}
+
+// Management API: everything below is scoped to one business
+
+export interface CatalogItem {
+  id: number;
+  name: string;
+  description: string | null;
+  suggestedPrice: number;
+  alcoholic: boolean;
+  archived: boolean;
+}
+
+export interface ItemRequest {
+  name: string;
+  description: string | null;
+  suggestedPrice: number;
+  alcoholic: boolean;
+}
+
+export type MenuStatus = "DRAFT" | "PUBLISHED";
+
+export interface ManagedMenuItem {
+  /** The catalog item, which is also how the menu's endpoints address it */
+  itemId: number;
+  name: string;
+  price: number;
+  quantity: number;
+  /** Archived in the catalog after it was added */
+  archived: boolean;
+}
+
+export interface ManagedMenu {
+  id: number;
+  serviceDate: string;
+  startsAt: string;
+  endsAt: string;
+  status: MenuStatus;
+  /** Sorted by name */
+  items: ManagedMenuItem[];
+}
+
+/** When a menu is served: a date and a window in the business's local time */
+export interface MenuWindow {
+  serviceDate: string;
+  startsAt: string;
+  endsAt: string;
+}
+
+export interface AddMenuItemRequest {
+  itemId: number;
+  /** The item's suggested price when omitted */
+  price?: number;
+  quantity: number;
+}
+
+export interface UpdateMenuItemRequest {
+  price: number;
+  quantity: number;
+}
+
+/** One invalid field of a VALIDATION_FAILED error; `code` is the constraint, e.g. "NotBlank" */
+export interface FieldError {
+  field: string;
+  code: string;
 }
