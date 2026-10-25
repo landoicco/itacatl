@@ -1,9 +1,13 @@
 // The /vitest entry registers the matchers and their types on Vitest's expect
 import "@testing-library/jest-dom/vitest";
-import { cleanup } from "@testing-library/react";
+import { cleanup, configure } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, vi } from "vitest";
 import i18n from "@/i18n";
 import { server } from "./server";
+
+// findBy* waits 1 s by default. The first render of a test file also loads its modules, which
+// can take longer when every file runs in parallel, as in CI; a real failure still fails
+configure({ asyncUtilTimeout: 3000 });
 
 beforeAll(async () => {
   // Tests assert on English text, whatever the default locale of the build

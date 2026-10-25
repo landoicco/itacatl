@@ -1,12 +1,14 @@
 import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
-import { Outlet, ScrollRestoration } from "react-router";
+import { Navigate, Outlet, ScrollRestoration } from "react-router";
 import type { RouteObject } from "react-router";
 import { ApiError } from "@/api/client";
 import { queryKeys } from "@/api/queries";
 import BusinessPickerPage from "@/features/account/BusinessPickerPage";
 import SignInPage from "@/features/auth/SignInPage";
+import CatalogPage from "@/features/catalog/CatalogPage";
 import ShopListPage from "@/features/shops/ShopListPage";
 import ShopPage from "@/features/menu/ShopPage";
+import ManageLayout from "./ManageLayout";
 import NotFoundPage from "./NotFoundPage";
 import RequireSession from "./RequireSession";
 
@@ -29,7 +31,17 @@ export const routes: RouteObject[] = [
       {
         path: "manage",
         element: <RequireSession />,
-        children: [{ index: true, element: <BusinessPickerPage /> }],
+        children: [
+          { index: true, element: <BusinessPickerPage /> },
+          {
+            path: ":slug",
+            element: <ManageLayout />,
+            children: [
+              { index: true, element: <Navigate to="menus" replace /> },
+              { path: "catalog", element: <CatalogPage /> },
+            ],
+          },
+        ],
       },
       { path: "*", element: <NotFoundPage /> },
     ],

@@ -1,7 +1,7 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { render } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router";
-import { routes } from "@/app/routes";
+import { createQueryClient, routes } from "@/app/routes";
 
 /**
  * Renders the real app routes at a URL, with a fresh cache per test. Returns the router so tests
@@ -9,8 +9,12 @@ import { routes } from "@/app/routes";
  */
 export function renderRoute(path: string) {
   const router = createMemoryRouter(routes, { initialEntries: [path] });
-  // No retries: an error should show at once instead of after the retry delays
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  // The app's own client, so its global error handling runs too, without retries: an error
+  // should show at once instead of after the retry delays
+  const queryClient = createQueryClient();
+  queryClient.setDefaultOptions({
+    queries: { ...queryClient.getDefaultOptions().queries, retry: false },
+  });
 
   render(
     <QueryClientProvider client={queryClient}>

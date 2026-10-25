@@ -1,6 +1,12 @@
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
-import type { BusinessDetail, BusinessSummary, CurrentUser, MenuDetail } from "@/api/types";
+import type {
+  BusinessDetail,
+  BusinessSummary,
+  CatalogItem,
+  CurrentUser,
+  MenuDetail,
+} from "@/api/types";
 
 /*
  * A fake API for component tests. MSW intercepts the real fetch calls, so tests exercise the
@@ -120,6 +126,41 @@ export const accounts: Record<string, CurrentUser> = {
   },
 };
 
+export const sunnyCatalog: CatalogItem[] = [
+  {
+    id: 101,
+    name: "Lime sorbet",
+    description: null,
+    suggestedPrice: 40,
+    alcoholic: false,
+    archived: false,
+  },
+  {
+    id: 102,
+    name: "Maracuyá sorbet",
+    description: null,
+    suggestedPrice: 45,
+    alcoholic: false,
+    archived: false,
+  },
+  {
+    id: 103,
+    name: "Rompope",
+    description: "Eggnog liqueur.",
+    suggestedPrice: 60,
+    alcoholic: true,
+    archived: false,
+  },
+  {
+    id: 104,
+    name: "Old flavor",
+    description: null,
+    suggestedPrice: 30,
+    alcoholic: false,
+    archived: true,
+  },
+];
+
 // The fake server's session; tests start signed out, or sign in with signInAs
 let session: CurrentUser | null = null;
 export const signInAs = (email: string | null) => {
@@ -141,6 +182,10 @@ export const handlers = [
   http.post("/api/auth/logout", () => {
     signInAs(null);
     return new HttpResponse(null, { status: 204 });
+  }),
+  http.get("/api/manage/businesses/:slug/items", ({ params }) => {
+    if (!session) return problem(401, "AUTHENTICATION_REQUIRED");
+    return HttpResponse.json(params.slug === "sunny-scoops" ? sunnyCatalog : []);
   }),
   http.get("/api/businesses", () => HttpResponse.json(shops)),
   http.get("/api/businesses/:slug", ({ params }) =>

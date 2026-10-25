@@ -1,8 +1,7 @@
 {
   "header": {
     "language": "Idioma",
-    "businessSignIn": "Para negocios",
-    "myBusinesses": "Mis negocios"
+    "businessSignIn": "Para negocios"
   },
   "home": {
     "title": "Elige tu nieve, te la apartamos",
@@ -64,7 +63,21 @@
     "role": {
       "OWNER": "Dueño",
       "STAFF": "Personal"
+    },
+    "sectionsLabel": "Secciones",
+    "switchBusiness": "Cambiar de negocio",
+    "sections": {
+      "menus": "Menús",
+      "catalog": "Catálogo"
     }
+  },
+  "catalog": {
+    "title": "Catálogo",
+    "search": "Busca en tu catálogo",
+    "empty": "Tu catálogo está vacío.",
+    "archived_one": "Archivado ({{count}})",
+    "archived_other": "Archivados ({{count}})",
+    "suggestedPrice": "Sugerido {{price}}"
   },
   "fieldErrors": {
     "NotBlank": "Este campo es obligatorio.",

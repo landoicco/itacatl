@@ -1,8 +1,7 @@
 {
   "header": {
     "language": "Language",
-    "businessSignIn": "For businesses",
-    "myBusinesses": "My businesses"
+    "businessSignIn": "For businesses"
   },
   "home": {
     "title": "Pick a scoop, we'll save it for you",
@@ -64,7 +63,21 @@
     "role": {
       "OWNER": "Owner",
       "STAFF": "Staff"
+    },
+    "sectionsLabel": "Sections",
+    "switchBusiness": "Switch business",
+    "sections": {
+      "menus": "Menus",
+      "catalog": "Catalog"
     }
+  },
+  "catalog": {
+    "title": "Catalog",
+    "search": "Search your catalog",
+    "empty": "Your catalog is empty.",
+    "archived_one": "Archived ({{count}})",
+    "archived_other": "Archived ({{count}})",
+    "suggestedPrice": "Suggested {{price}}"
   },
   "fieldErrors": {
     "NotBlank": "This field is required.",

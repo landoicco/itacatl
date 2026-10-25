@@ -18,6 +18,15 @@ export function useCurrentUser() {
   });
 }
 
+/**
+ * The signed-in user's membership in a business, or undefined when they have none. Screens use
+ * the role to hide what staff cannot do; the API enforces it either way.
+ */
+export function useMembership(slug: string) {
+  const { data: user } = useCurrentUser();
+  return user?.businesses.find((business) => business.slug === slug);
+}
+
 export function useSignIn() {
   const queryClient = useQueryClient();
   return useMutation({
