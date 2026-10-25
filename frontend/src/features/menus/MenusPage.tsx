@@ -16,7 +16,7 @@ import ErrorMessage from "@/components/ErrorMessage";
 import InlineError from "@/components/InlineError";
 import SkeletonCards from "@/components/SkeletonCards";
 import { formatTime, todayIn } from "@/i18n/format";
-import { flavorColor } from "@/theme/flavorColor";
+import { itemColor } from "@/theme/itemColor";
 import { addDays, hasEnded, hhmm, laterOf, useDayLabel } from "./menuDates";
 import MenuWindowSheet from "./MenuWindowSheet";
 
@@ -186,7 +186,7 @@ function MenuCard({
               <span
                 key={item.itemId}
                 className="size-4 rounded-full"
-                style={{ background: flavorColor(item.name) }}
+                style={{ background: itemColor(item.name) }}
               />
             ))}
           </div>

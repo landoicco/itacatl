@@ -8,7 +8,7 @@ import InlineError from "@/components/InlineError";
 import Sheet from "@/components/Sheet";
 import SkeletonCards from "@/components/SkeletonCards";
 import { formatCurrency, normalizeForSearch } from "@/i18n/format";
-import { flavorColor } from "@/theme/flavorColor";
+import { itemColor } from "@/theme/itemColor";
 
 interface AddItemsSheetProps {
   slug: string;
@@ -109,7 +109,7 @@ function CatalogRow({ item, added, onAdd }: CatalogRowProps) {
       <span
         aria-hidden="true"
         className="size-7 flex-none rounded-full"
-        style={{ background: flavorColor(item.name) }}
+        style={{ background: itemColor(item.name) }}
       />
       <div className="min-w-0 flex-1">
         {/* Item names are business content, shown as written */}

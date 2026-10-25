@@ -15,7 +15,7 @@ import ErrorMessage from "@/components/ErrorMessage";
 import InlineError from "@/components/InlineError";
 import SkeletonCards from "@/components/SkeletonCards";
 import { currencySymbol, formatCurrency, formatTime } from "@/i18n/format";
-import { flavorColor } from "@/theme/flavorColor";
+import { itemColor } from "@/theme/itemColor";
 import AddItemsSheet from "./AddItemsSheet";
 import { hasEnded, hhmm, useDayLabel } from "./menuDates";
 import MenuWindowSheet from "./MenuWindowSheet";
@@ -238,7 +238,7 @@ function ItemRow({ item, canChange, onSave, onRemove }: ItemRowProps) {
         <span
           aria-hidden="true"
           className={`size-7 flex-none rounded-full ${item.archived ? "opacity-50" : ""}`}
-          style={{ background: flavorColor(item.name) }}
+          style={{ background: itemColor(item.name) }}
         />
         {/* Item names are business content, shown as written */}
         <span className={`font-bold ${item.archived ? "text-muted line-through" : ""}`}>

@@ -9,7 +9,7 @@ import ErrorMessage from "@/components/ErrorMessage";
 import InlineError from "@/components/InlineError";
 import SkeletonCards from "@/components/SkeletonCards";
 import { formatCurrency, normalizeForSearch } from "@/i18n/format";
-import { flavorColor } from "@/theme/flavorColor";
+import { itemColor } from "@/theme/itemColor";
 import ItemSheet from "./ItemSheet";
 
 /**
@@ -144,7 +144,7 @@ function ItemList({ items, actions }: ItemListProps) {
           <span
             aria-hidden="true"
             className={`size-7 flex-none rounded-full ${item.archived ? "opacity-50" : ""}`}
-            style={{ background: flavorColor(item.name) }}
+            style={{ background: itemColor(item.name) }}
           />
           <div className="min-w-0">
             {/* Item names are business content, shown as written */}

@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import type { MenuItem } from "@/api/types";
 import { formatCurrency } from "@/i18n/format";
-import { flavorColor } from "@/theme/flavorColor";
+import { itemColor } from "@/theme/itemColor";
 
 // At or below this many portions, availability is highlighted
 const LOW_STOCK = 5;
@@ -29,7 +29,7 @@ export default function MenuItemCard({ item }: { item: MenuItem }) {
       <span
         aria-hidden="true"
         className="size-11 flex-none rounded-full"
-        style={{ background: flavorColor(item.name) }}
+        style={{ background: itemColor(item.name) }}
       />
       <div className="flex flex-1 flex-col gap-1">
         <div className="flex items-baseline justify-between gap-2">
