@@ -74,10 +74,12 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    app[app/<br/>routes, providers] --> shops[features/shops/]
+    app[app/<br/>routes, providers,<br/>panel layout and guard] --> shops[features/shops/]
     app --> menu[features/menu/]
+    app --> panel[features/auth/, account/,<br/>catalog/, menus/]
     shops --> shared
     menu --> shared
+    panel --> shared
     subgraph shared [shared layers]
         components[components/] --> api[api/]
         components --> theme[theme/]
@@ -87,10 +89,10 @@ flowchart TD
 
 | Folder | Holds | May import |
 |---|---|---|
-| `app/` | Routes, providers, the 404 page | Everything |
-| `features/<name>/` | One screen and the components only it uses, with their tests | Shared layers only, never another feature or `app/` |
-| `components/` | UI shared by features: header, opening status, errors, skeletons | `api/`, `theme/`, `i18n/` |
-| `api/` | Typed client, `ApiError`, TanStack Query hooks | Nothing above it |
+| `app/` | Routes, providers, the 404 page, and what frames the owner panel: the session guard and the panel layout | Everything |
+| `features/<name>/` | One screen and the components only it uses, with their tests. The marketplace has `shops` and `menu`; the [owner panel](owner-panel.md) has `auth`, `account`, `catalog` and `menus` | Shared layers only, never another feature or `app/` |
+| `components/` | UI shared by features: header, opening status, errors, skeletons, the modal sheet | `api/`, `theme/`, `i18n/` |
+| `api/` | Typed client, `ApiError` and its translatable codes, TanStack Query hooks: public data, the session and the management API | Nothing above it |
 | `theme/` | Tokens, themes, fonts, item colors ([theming](theming.md)) | Nothing above it |
 | `i18n/` | Catalogs and `Intl` formatting ([i18n](i18n.md)) | Nothing above it |
 
@@ -112,7 +114,10 @@ components/, api/, theme/ or i18n/.
 |---|---|---|
 | Server state vs UI state | TanStack Query for API data; `useState` only for UI (search text, filters) | Caching, loading and error states, and refetching are solved once, not per `useEffect` |
 | Adapter at the boundary | `api/client.ts` | HTTP and Problem Details become typed data and `ApiError` codes; components never see `fetch` |
-| Centralized cache keys | `queryKeys` in `api/queries.ts` | Invalidation (slice 2) cannot miss a variant |
+| Centralized cache keys | `queryKeys` in `api/queries.ts` | Invalidation cannot miss a variant; signing out drops every `manage` key at once |
+| Session as server state | `useCurrentUser` (a query), `RequireSession` | Who is signed in is cached like any API data; signing in and out are cache updates ([owner panel](owner-panel.md#the-session)) |
+| Serialized mutations | A TanStack Query scope per menu in `api/manage.ts` | Quick taps reach the server and come back in order ([why](owner-panel.md#quick-taps-in-order)) |
+| Native platform first | `<dialog>` for sheets, `confirm()` before deleting, HTML constraints on inputs | Focus trapping, Escape and validation come from the browser, with no dependency |
 | Design tokens | `theme/themes.css` | Themes per vertical without touching components |
 | URL as state | `?menu=<id>` on the shop page | A shared link opens the same service day |
 | Composition | `SiteHeader` takes the page's controls as `children` | The header stays generic; each page decides what goes in it |
@@ -122,7 +127,7 @@ components/, api/, theme/ or i18n/.
 | Level | Backend | Frontend |
 |---|---|---|
 | Unit | `WeeklyScheduleTest`: pure rules with fixed dates | Formatters, item colors, the API client with a stubbed `fetch` |
-| Integration | Services, repositories and the seeder against PostgreSQL in Testcontainers, with a fixed `Clock`; the sign-in flow and the management API over HTTP with the full application (`@SpringBootTest`) and a real sign-in (`BrowserSession`) | Pages through the real routes, with the API faked by **MSW** at the network level |
+| Integration | Services, repositories and the seeder against PostgreSQL in Testcontainers, with a fixed `Clock`; the sign-in flow and the management API over HTTP with the full application (`@SpringBootTest`) and a real sign-in (`BrowserSession`) | Pages through the real routes, with the API faked by **MSW** at the network level. For the owner panel the fake API keeps state and applies the backend's session, role and rule checks |
 | Contract | `@WebMvcTest` with the real security rules: JSON shapes, date formats, Problem Details, public access | Catalog parity across locales |
 
 Both sides freeze time in tests: the backend injects a fixed `Clock`, the frontend fakes only `Date` (`vi.useFakeTimers({ toFake: ["Date"] })`) so promises and timers keep working.

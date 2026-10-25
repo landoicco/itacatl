@@ -104,7 +104,7 @@ A **draft menu answers 404**, like a missing one, so customers cannot discover u
 
 ## Management API
 
-What the owner panel (slice 2c) uses. Every endpoint lives under `/api/manage/businesses/{slug}` and needs a signed-in member of that business: owners change things, staff only read. How that is checked: [security guide](security.md#per-business-permissions-method-security).
+What the [owner panel](owner-panel.md) uses. Every endpoint lives under `/api/manage/businesses/{slug}` and needs a signed-in member of that business: owners change things, staff only read. How that is checked: [security guide](security.md#per-business-permissions-method-security).
 
 | Method | Path | Does |
 |---|---|---|
@@ -206,7 +206,7 @@ Authentication and permission errors (401, 403) are in the [security guide](secu
 
 - **Rules, across fields or against the database: the service, 422.** A window that ends before it starts, a date that has passed, publishing an empty menu. These need other fields, the clock or stored data, so they live in the service and throw `BusinessRuleException`. The database's `CHECK` constraints stay as a last line of defense; checking first in Java turns what would be a 500 into a code the client can translate.
 
-To add a rule: a factory method in `BusinessRuleException` with a new code, a test in the service's integration test, the code in this table, and its translation in the frontend's `apiErrors` catalogs when a screen can show it.
+To add a rule: a factory method in `BusinessRuleException` with a new code, a test in the service's integration test, the code in this table, and, in the frontend, the code in `KNOWN_CODES` (`api/errors.ts`) with a message in every locale's `apiErrors` catalog; until then the client shows its generic error.
 
 ## Sample data
 

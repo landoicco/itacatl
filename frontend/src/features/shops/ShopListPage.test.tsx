@@ -59,4 +59,13 @@ describe("ShopListPage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Something went wrong.");
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
+
+  it("leads businesses to their panel, through sign-in", async () => {
+    const { router } = renderRoute("/");
+
+    fireEvent.click(await screen.findByRole("link", { name: "For businesses" }));
+
+    expect(await screen.findByRole("heading", { name: "Business sign-in" })).toBeInTheDocument();
+    expect(router.state.location.search).toBe("?next=%2Fmanage");
+  });
 });
