@@ -2,7 +2,6 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router";
-import { errorCode } from "@/api/errors";
 import {
   useCreateMenu,
   useDeleteMenu,
@@ -14,6 +13,7 @@ import { useBusiness } from "@/api/queries";
 import { useMembership } from "@/api/session";
 import type { ManagedMenu, MenuWindow } from "@/api/types";
 import ErrorMessage from "@/components/ErrorMessage";
+import InlineError from "@/components/InlineError";
 import SkeletonCards from "@/components/SkeletonCards";
 import { formatTime, todayIn } from "@/i18n/format";
 import { flavorColor } from "@/theme/flavorColor";
@@ -23,7 +23,7 @@ import MenuWindowSheet from "./MenuWindowSheet";
 // The sheet on screen: a new menu, or a duplicate of one
 type SheetState = { kind: "new" } | { kind: "duplicate"; source: ManagedMenu } | null;
 
-const SHOWN_SCOOPS = 8;
+const SHOWN_ITEMS = 8;
 
 /**
  * A business's menus from today on, by day, drafts included. Owners create, duplicate, publish
@@ -103,11 +103,7 @@ export default function MenusPage() {
         )}
       </div>
 
-      {actionError && (
-        <p role="alert" className="rounded-card bg-soft px-4 py-3 text-sm font-bold text-low">
-          {t(`apiErrors.${errorCode(actionError)}`)}
-        </p>
-      )}
+      {actionError && <InlineError error={actionError} />}
 
       {days.size === 0 && <p className="py-8 text-center text-muted">{t("menus.empty")}</p>}
 
@@ -186,7 +182,7 @@ function MenuCard({
       <div className="flex items-center gap-3">
         {menu.items.length > 0 && (
           <div className="flex gap-1" aria-hidden="true">
-            {menu.items.slice(0, SHOWN_SCOOPS).map((item) => (
+            {menu.items.slice(0, SHOWN_ITEMS).map((item) => (
               <span
                 key={item.itemId}
                 className="size-4 rounded-full"

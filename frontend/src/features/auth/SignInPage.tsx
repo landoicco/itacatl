@@ -1,8 +1,8 @@
 import type { FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, Navigate, useSearchParams } from "react-router";
-import { errorCode } from "@/api/errors";
 import { useCurrentUser, useSignIn } from "@/api/session";
+import InlineError from "@/components/InlineError";
 import SiteHeader from "@/components/SiteHeader";
 
 const DEFAULT_NEXT = "/manage";
@@ -49,11 +49,7 @@ export default function SignInPage() {
             <p className="mt-1 text-sm text-muted">{t("auth.subtitle")}</p>
           </div>
 
-          {signIn.error && (
-            <p role="alert" className="rounded-card bg-soft px-4 py-3 text-sm font-bold text-low">
-              {t(`apiErrors.${errorCode(signIn.error)}`)}
-            </p>
-          )}
+          {signIn.error && <InlineError error={signIn.error} />}
 
           <label className="flex flex-col gap-1.5 text-sm font-bold">
             {t("auth.email")}

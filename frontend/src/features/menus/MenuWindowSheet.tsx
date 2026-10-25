@@ -1,8 +1,8 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { errorCode } from "@/api/errors";
 import type { ManagedMenu, MenuWindow } from "@/api/types";
+import InlineError from "@/components/InlineError";
 import Sheet from "@/components/Sheet";
 
 interface MenuWindowSheetProps {
@@ -59,11 +59,7 @@ function WindowForm({ hint, submitLabel, initial, onSubmit, onSaved }: WindowFor
     <form onSubmit={submit} className="flex flex-col gap-4">
       {hint && <p className="-mt-2 text-sm text-muted">{hint}</p>}
       {/* The window's rules (it ends after it starts, it has not ended) are the backend's */}
-      {error !== null && (
-        <p role="alert" className="rounded-card bg-soft px-4 py-3 text-sm font-bold text-low">
-          {t(`apiErrors.${errorCode(error)}`)}
-        </p>
-      )}
+      {error !== null && <InlineError error={error} />}
       <label className="flex flex-col gap-1.5 text-sm font-bold">
         {t("menus.form.date")}
         <input

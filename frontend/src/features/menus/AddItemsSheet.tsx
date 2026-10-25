@@ -1,9 +1,10 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { errorCode } from "@/api/errors";
 import { useAddMenuItem, useCatalog } from "@/api/manage";
 import type { CatalogItem, ManagedMenu } from "@/api/types";
+import ErrorMessage from "@/components/ErrorMessage";
+import InlineError from "@/components/InlineError";
 import Sheet from "@/components/Sheet";
 import SkeletonCards from "@/components/SkeletonCards";
 import { formatCurrency, normalizeForSearch } from "@/i18n/format";
@@ -37,7 +38,7 @@ function Picker({ slug, menu }: { slug: string; menu: ManagedMenu }) {
 
   if (catalog.isPending) return <SkeletonCards count={3} height="h-16" />;
   if (catalog.isError) {
-    return <p role="alert">{t(`apiErrors.${errorCode(catalog.error)}`)}</p>;
+    return <ErrorMessage error={catalog.error} onRetry={() => void catalog.refetch()} />;
   }
 
   const inMenu = new Set(menu.items.map((item) => item.itemId));
@@ -59,11 +60,7 @@ function Picker({ slug, menu }: { slug: string; menu: ManagedMenu }) {
         />
       </label>
 
-      {add.error && (
-        <p role="alert" className="rounded-card bg-soft px-4 py-3 text-sm font-bold text-low">
-          {t(`apiErrors.${errorCode(add.error)}`)}
-        </p>
-      )}
+      {add.error && <InlineError error={add.error} />}
 
       {items.length === 0 ? (
         <p className="py-6 text-center text-muted">{t("menus.add.none")}</p>

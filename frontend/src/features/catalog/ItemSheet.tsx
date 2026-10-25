@@ -2,8 +2,9 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useCreateItem, useUpdateItem } from "@/api/manage";
-import { errorCode, fieldErrors } from "@/api/errors";
+import { fieldErrors } from "@/api/errors";
 import type { CatalogItem } from "@/api/types";
+import InlineError from "@/components/InlineError";
 import Sheet from "@/components/Sheet";
 
 interface ItemSheetProps {
@@ -77,11 +78,7 @@ function ItemForm({
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-4">
-      {formError && (
-        <p role="alert" className="rounded-card bg-soft px-4 py-3 text-sm font-bold text-low">
-          {t(`apiErrors.${errorCode(formError)}`)}
-        </p>
-      )}
+      {formError && <InlineError error={formError} />}
 
       {/* The error sits outside the label, so it is not part of the input's name */}
       <div className="flex flex-col gap-1.5">

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router";
-import { errorCode } from "@/api/errors";
 import {
   useManagedMenu,
   usePublishMenu,
@@ -13,6 +12,7 @@ import { useBusiness } from "@/api/queries";
 import { useMembership } from "@/api/session";
 import type { ManagedMenuItem, UpdateMenuItemRequest } from "@/api/types";
 import ErrorMessage from "@/components/ErrorMessage";
+import InlineError from "@/components/InlineError";
 import SkeletonCards from "@/components/SkeletonCards";
 import { currencySymbol, formatCurrency, formatTime } from "@/i18n/format";
 import { flavorColor } from "@/theme/flavorColor";
@@ -109,11 +109,7 @@ export default function MenuEditorPage() {
         )
       )}
 
-      {actionError && (
-        <p role="alert" className="rounded-card bg-soft px-4 py-3 text-sm font-bold text-low">
-          {t(`apiErrors.${errorCode(actionError)}`)}
-        </p>
-      )}
+      {actionError && <InlineError error={actionError} />}
 
       {data.items.length === 0 ? (
         <p className="py-8 text-center text-muted">{t("menus.editor.noItems")}</p>
@@ -266,11 +262,7 @@ function ItemRow({ item, canChange, onSave, onRemove }: ItemRowProps) {
 
       {item.archived && <p className="text-sm text-muted">{t("menus.editor.archivedNote")}</p>}
 
-      {error !== null && (
-        <p role="alert" className="text-sm font-bold text-low">
-          {t(`apiErrors.${errorCode(error)}`)}
-        </p>
-      )}
+      {error !== null && <InlineError error={error} compact />}
 
       {canChange ? (
         <div className="flex flex-wrap items-center gap-2">

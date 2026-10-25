@@ -2,11 +2,11 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useParams } from "react-router";
-import { errorCode } from "@/api/errors";
 import { useArchiveItem, useCatalog, useUnarchiveItem } from "@/api/manage";
 import { useMembership } from "@/api/session";
 import type { CatalogItem } from "@/api/types";
 import ErrorMessage from "@/components/ErrorMessage";
+import InlineError from "@/components/InlineError";
 import SkeletonCards from "@/components/SkeletonCards";
 import { formatCurrency, normalizeForSearch } from "@/i18n/format";
 import { flavorColor } from "@/theme/flavorColor";
@@ -78,16 +78,19 @@ export default function CatalogPage() {
         />
       </label>
 
-      {actionError && (
-        <p role="alert" className="rounded-card bg-soft px-4 py-3 text-sm font-bold text-low">
-          {t(`apiErrors.${errorCode(actionError)}`)}
-        </p>
-      )}
+      {actionError && <InlineError error={actionError} />}
 
-      {data.length === 0 ? (
-        <p className="py-8 text-center text-muted">{t("catalog.empty")}</p>
-      ) : (
+      {/* Never a blank list: say why there is nothing to show */}
+      {active.length > 0 ? (
         <ItemList items={active} actions={actions} />
+      ) : (
+        <p className="py-8 text-center text-muted">
+          {data.length === 0
+            ? t("catalog.empty")
+            : needle
+              ? t("catalog.noMatches")
+              : t("catalog.allArchived")}
+        </p>
       )}
 
       {archived.length > 0 && (

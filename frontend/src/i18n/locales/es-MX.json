@@ -91,7 +91,9 @@
       "alcoholicHint": "Se muestra a los clientes como etiqueta",
       "save": "Guardar",
       "saving": "Guardando…"
-    }
+    },
+    "noMatches": "Ningún producto coincide con tu búsqueda.",
+    "allArchived": "Todos tus productos están archivados."
   },
   "menus": {
     "title": "Menús",

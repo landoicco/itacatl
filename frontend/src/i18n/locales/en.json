@@ -91,7 +91,9 @@
       "alcoholicHint": "Shown to customers as a label",
       "save": "Save item",
       "saving": "Saving…"
-    }
+    },
+    "noMatches": "No items match your search.",
+    "allArchived": "Every item is archived."
   },
   "menus": {
     "title": "Menus",
