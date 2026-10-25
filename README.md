@@ -34,6 +34,7 @@ A work in progress, built in the open.
 | Marketplace domain model and read API | ✅ Done |
 | Customer UI: themes, phone and desktop layouts | ✅ Done |
 | Owner and staff accounts: Spring Security, sessions in PostgreSQL | ✅ Done |
+| Owner API: catalog, menu lifecycle, per-business permissions | ✅ Done |
 | Owner panel, tenant isolation, reservations and payments ([roadmap](docs/product-spec.md#rework-roadmap)) | 🚧 Next |
 | Terraform: bootstrap, modules, CI/CD | 📋 Planned |
 | Ephemeral AWS deploy with load test and recovery evidence | 📋 Planned |
@@ -119,6 +120,8 @@ Layers, patterns and the rules that keep them: [architecture guide](docs/archite
 - **No N+1:** the shop list loads every shop's hours and next menu in a fixed number of queries.
 - **Real database in tests:** integration tests run against PostgreSQL in Testcontainers, which also validates every Flyway migration.
 - **Sessions that survive the server:** Spring Security with sessions stored in PostgreSQL by Spring Session, so a replaced spot instance signs nobody out. CSRF tokens, session fixation protection and one error for every failed sign-in, so emails cannot be enumerated ([security guide](docs/security.md)).
+- **Authorization in three layers:** URL rules require a session, `@PreAuthorize` on the services checks the user's role in that business, and every lookup is scoped to the business, so a foreign ID is a 404.
+- **Errors a form can use:** field errors carry their constraint as a code, and business rules answer 422 with their own code, all as Problem Details the client translates.
 
 **Frontend**
 - **Themes as design tokens:** components only use semantic utilities (`bg-surface`, `rounded-card`), so a vertical's identity is a block of CSS variables ([theming](docs/theming.md)).
@@ -149,13 +152,24 @@ The marketplace is public and read-only; dates and times are local to each busin
 | `GET` | `/api/businesses/{slug}` | Profile, weekly hours and upcoming menus |
 | `GET` | `/api/menus/{id}` | A published menu with its items, prices and availability |
 
-Accounts sign in with a session cookie; `POST` requests need the CSRF token. Details in the [security guide](docs/security.md).
+Accounts sign in with a session cookie; `POST`, `PUT` and `DELETE` requests need the CSRF token. Details in the [security guide](docs/security.md).
 
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/api/auth/login` | Signs in with email and password; returns the user and their businesses |
 | `POST` | `/api/auth/logout` | Ends the session |
 | `GET` | `/api/auth/me` | The signed-in user and their businesses, or 401 |
+
+The management API, under `/api/manage/businesses/{slug}`, is for members of that business: owners change, staff read. Full list and rules in the [domain model](docs/domain-model.md#management-api).
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` `POST` | `/items` | The catalog, archived items included; create an item |
+| `PUT` | `/items/{itemId}` | Edit an item; `POST …/archive` and `…/unarchive` hide or restore it |
+| `GET` `POST` | `/menus` | Menus with drafts; create a draft for a date and window |
+| `PUT` `DELETE` | `/menus/{menuId}` | Reschedule or delete a draft |
+| `POST` | `/menus/{menuId}/duplicate`, `/publish` | Copy a menu into a new draft; show it to customers |
+| `POST` `PUT` `DELETE` | `/menus/{menuId}/items…` | Offer a catalog item, set that day's price and stock, remove it |
 
 ## Development
 
@@ -179,9 +193,9 @@ Every pull request updates the documentation it affects, so `main` and its docs 
 | Document | Contents |
 |---|---|
 | [Product spec](docs/product-spec.md) | Scope, domain rules, order flow, rework roadmap |
-| [Domain model](docs/domain-model.md) | Tables, tenant integrity, time handling, read API, sample data |
+| [Domain model](docs/domain-model.md) | Tables, tenant integrity, time handling, read and management API, errors, sample data |
 | [Architecture](docs/architecture.md) | Backend and frontend layers, patterns, enforced dependency rules, tests |
-| [Security](docs/security.md) | Spring Security, sign-in, sessions in PostgreSQL, CSRF, interview questions |
+| [Security](docs/security.md) | Spring Security, sign-in, per-business permissions, sessions in PostgreSQL, CSRF, interview questions |
 | [Theming](docs/theming.md) | Design tokens, themes and how to add a vertical |
 | [i18n guide](docs/i18n.md) | How translations are wired in, dates and times, safety nets |
 | [Infra plan](docs/infra-plan.md) | AWS architecture, cost rules, work phases |
