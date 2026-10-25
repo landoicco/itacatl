@@ -140,7 +140,7 @@ Layers, patterns and the rules that keep them: [architecture guide](docs/archite
 
 - **Backend:** Java 21, Spring Boot 4, Spring Security, Spring Session JDBC, Spring Data JPA, Flyway, Maven
 - **Frontend:** React 19, TypeScript, Vite, Tailwind CSS 4, React Router, TanStack Query, i18next
-- **Tests:** JUnit 5, Testcontainers, Vitest, Testing Library, MSW
+- **Tests:** JUnit 6, Testcontainers, Vitest, Testing Library, MSW
 - **Database:** PostgreSQL 18
 - **Infrastructure:** Docker Compose today; AWS with Terraform planned
 
@@ -189,6 +189,20 @@ npm run lint && npm test -- --run && npm run build
 ```
 
 Every pull request updates the documentation it affects, so `main` and its docs stay consistent.
+
+## Releases
+
+Versions follow [Semantic Versioning](https://semver.org), with one version for the whole repository: the backend and the frontend ship together, so `backend/pom.xml` and `frontend/package.json` always carry the same number.
+
+- **`0.y.z` until the first production deploy.** Each minor version closes a milestone of the [roadmap](docs/product-spec.md#rework-roadmap), starting with `0.1.0`: the marketplace and the owner panel. While the schema can still be squashed into a clean baseline ([ADR 0003](docs/adr/0003-squash-migrations-before-first-deploy.md)), a new version may need a fresh database.
+- **`1.0.0` with the first production deploy.** From then on, migrations are never edited and an upgrade keeps the data.
+- **Cutting a release:** the pull request that completes a milestone sets the new version in both files. Once it is merged, `main` gets an annotated tag and a GitHub Release whose notes are generated from the merged pull requests:
+
+```shell
+git tag -a v0.1.0 -m "Marketplace and owner panel"
+git push origin v0.1.0
+gh release create v0.1.0 --title "v0.1.0" --generate-notes
+```
 
 ## Documentation
 

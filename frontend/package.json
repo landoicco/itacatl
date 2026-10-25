@@ -1,7 +1,7 @@
 {
   "name": "itacatl-frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Frontend of itacatl, a marketplace where small businesses publish dynamic menus and customers reserve food for pickup",
   "license": "MIT",
   "author": {

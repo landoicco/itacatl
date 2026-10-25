@@ -12,6 +12,20 @@ The screens where business owners and staff manage their catalog and menus, unde
 | `/manage/:slug/menus/:menuId` | One menu: add items from the catalog, price and portions of each item, sold out, remove, reschedule a draft, publish | Members of the business |
 | `/manage/:slug/catalog` | The catalog: search, archived items folded at the end, a message instead of an empty list (no items, no matches, only archived matches, every item archived); owners create, edit, archive and unarchive | Members of the business |
 
+How a visitor gets to each screen:
+
+```mermaid
+flowchart LR
+    link["For businesses<br/>(marketplace header)"] --> manage["/manage"]
+    manage --> guard{RequireSession}
+    guard -->|no session| login["/login?next=…"]
+    login -->|signed in| guard
+    guard -->|signed in| picker[Business picker]
+    picker -->|"one business: skipped<br/>several: the owner picks"| menus["/manage/:slug/menus"]
+    menus <-->|tab bar| catalog["/manage/:slug/catalog"]
+    menus --> editor["/manage/:slug/menus/:menuId"]
+```
+
 The panel is mobile-first: owners update their menu from a phone during the day.
 
 ## How it is wired in
