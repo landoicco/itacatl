@@ -104,6 +104,63 @@ describe("MenuEditorPage", () => {
     expect(within(added).getByLabelText("Portions of Maracuyá sorbet")).toHaveValue(15);
   });
 
+  it("treats a cleared field as a mistake, not as zero", async () => {
+    let saves = 0;
+    server.events.on("request:start", ({ request }) => {
+      if (request.method === "PUT") saves++;
+    });
+    renderRoute("/manage/sunny-scoops/menus/202");
+    const price = await screen.findByLabelText("Price of Lime sorbet");
+
+    fireEvent.change(price, { target: { value: "" } });
+    fireEvent.blur(price);
+
+    // Number("") is 0: saving it would put the item on sale for free
+    expect(price).toHaveValue(40);
+    expect(saves).toBe(0);
+    server.events.removeAllListeners();
+  });
+
+  it("keeps a failed save's error in its row while other rows save", async () => {
+    server.use(
+      http.put("/api/manage/businesses/:slug/menus/:id/items/101", () =>
+        HttpResponse.json(
+          { status: 500, code: "UNKNOWN_ERROR" },
+          { status: 500, headers: { "Content-Type": "application/problem+json" } }
+        )
+      )
+    );
+    renderRoute("/manage/sunny-scoops/menus/201");
+
+    fireEvent.click(await screen.findByRole("button", { name: "One more portion of Lime sorbet" }));
+    expect(await within(row("Lime sorbet")).findByRole("alert")).toHaveTextContent(
+      "Something went wrong."
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "One more portion of Maracuyá sorbet" }));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Portions of Maracuyá sorbet")).toHaveValue(1)
+    );
+    expect(within(row("Lime sorbet")).getByRole("alert")).toBeInTheDocument();
+    expect(screen.getByLabelText("Portions of Lime sorbet")).toHaveValue(30);
+  });
+
+  it("adds an item once, however many times Add is tapped", async () => {
+    renderRoute("/manage/sunny-scoops/menus/202");
+    fireEvent.click(await screen.findByRole("button", { name: /Add from catalog/ }));
+    const sheet = screen.getByRole("dialog", { name: "Add from catalog" });
+    const rompope = await within(sheet).findByRole("listitem", { name: "Rompope" });
+
+    fireEvent.change(within(rompope).getByLabelText("Portions of Rompope"), {
+      target: { value: "8" },
+    });
+    fireEvent.click(within(rompope).getByRole("button", { name: "Add" }));
+    fireEvent.click(within(rompope).getByRole("button", { name: "Add" }));
+
+    expect(await within(rompope).findByText("Already in this menu")).toBeInTheDocument();
+    expect(within(sheet).queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("removes an item", async () => {
     renderRoute("/manage/sunny-scoops/menus/201");
 

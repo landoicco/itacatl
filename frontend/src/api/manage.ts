@@ -102,8 +102,9 @@ export const useDuplicateMenu = (slug: string) =>
 export const useRescheduleMenu = (slug: string, menuId: number) =>
   useMenuMutation(slug, (window: MenuWindow) => api.rescheduleMenu(slug, menuId, window), menuId);
 
-export const usePublishMenu = (slug: string) =>
-  useMenuMutation(slug, (menuId: number) => api.publishMenu(slug, menuId));
+/** `scopeMenuId` joins the scope of that menu's other changes, e.g. from its editor */
+export const usePublishMenu = (slug: string, scopeMenuId?: number) =>
+  useMenuMutation(slug, (menuId: number) => api.publishMenu(slug, menuId), scopeMenuId);
 
 export const useAddMenuItem = (slug: string, menuId: number) =>
   useMenuMutation(slug, (item: AddMenuItemRequest) => api.addMenuItem(slug, menuId, item), menuId);

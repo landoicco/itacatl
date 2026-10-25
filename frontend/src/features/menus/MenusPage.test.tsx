@@ -1,7 +1,8 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { http, HttpResponse } from "msw";
 import { renderRoute } from "@/test/renderRoute";
-import { NOW, signInAs } from "@/test/server";
+import { NOW, server, signInAs } from "@/test/server";
 
 const day = (name: string) => screen.getByRole("region", { name });
 
@@ -110,6 +111,29 @@ describe("MenusPage", () => {
     await screen.findByRole("region", { name: "Today · Sat 17" });
     expect(screen.queryByRole("button", { name: /New menu/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Publish" })).not.toBeInTheDocument();
+  });
+
+  it("does not offer to publish a draft whose window closed earlier today", async () => {
+    server.use(
+      http.get("/api/manage/businesses/:slug/menus", () =>
+        HttpResponse.json([
+          {
+            id: 210,
+            serviceDate: "2026-10-17",
+            startsAt: "08:00:00",
+            endsAt: "11:00:00",
+            status: "DRAFT",
+            items: [{ itemId: 101, name: "Lime sorbet", price: 40, quantity: 5, archived: false }],
+          },
+        ])
+      )
+    );
+    renderRoute("/manage/sunny-scoops/menus");
+
+    const today = await screen.findByRole("region", { name: "Today · Sat 17" });
+    expect(within(today).queryByRole("button", { name: "Publish" })).not.toBeInTheDocument();
+    // A draft nobody saw can still be deleted
+    expect(within(today).getByRole("button", { name: "Delete" })).toBeInTheDocument();
   });
 
   it("does not offer to delete a published menu", async () => {

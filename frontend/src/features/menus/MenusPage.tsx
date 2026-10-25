@@ -17,7 +17,7 @@ import ErrorMessage from "@/components/ErrorMessage";
 import SkeletonCards from "@/components/SkeletonCards";
 import { formatTime, todayIn } from "@/i18n/format";
 import { flavorColor } from "@/theme/flavorColor";
-import { addDays, hhmm, laterOf, useDayLabel } from "./menuDates";
+import { addDays, hasEnded, hhmm, laterOf, useDayLabel } from "./menuDates";
 import MenuWindowSheet from "./MenuWindowSheet";
 
 // The sheet on screen: a new menu, or a duplicate of one
@@ -118,8 +118,15 @@ export default function MenusPage() {
             <MenuCard key={menu.id} slug={slug} menu={menu}>
               {canManage && (
                 <>
-                  {menu.status === "DRAFT" && (
-                    <ActionButton primary onClick={() => publish.mutate(menu.id)}>
+                  {/* A draft whose window already closed today could never reach a customer;
+                      the backend would answer MENU_ENDED. It can still be deleted */}
+                  {menu.status === "DRAFT" && !hasEnded(menu, business.data.timeZone) && (
+                    <ActionButton
+                      primary
+                      // A second tap would reach a published menu: MENU_NOT_DRAFT
+                      disabled={publish.isPending && publish.variables === menu.id}
+                      onClick={() => publish.mutate(menu.id)}
+                    >
                       {t("menus.publish")}
                     </ActionButton>
                   )}
@@ -209,14 +216,16 @@ function MenuCard({
 interface ActionButtonProps {
   onClick: () => void;
   primary?: boolean;
+  disabled?: boolean;
   children: string;
 }
 
-function ActionButton({ onClick, primary = false, children }: ActionButtonProps) {
+function ActionButton({ onClick, primary = false, disabled = false, children }: ActionButtonProps) {
   return (
     <button
       onClick={onClick}
-      className={`min-h-10 cursor-pointer rounded-control px-4 text-sm font-bold ${
+      disabled={disabled}
+      className={`min-h-10 cursor-pointer rounded-control px-4 text-sm font-bold disabled:opacity-60 ${
         primary ? "border-theme bg-accent text-on-accent shadow-pressed" : "bg-soft text-accent"
       }`}
     >

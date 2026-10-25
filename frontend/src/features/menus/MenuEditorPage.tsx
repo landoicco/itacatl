@@ -34,7 +34,8 @@ export default function MenuEditorPage() {
   const menu = useManagedMenu(slug, menuId);
   const business = useBusiness(slug);
   const dayLabel = useDayLabel(business.data?.timeZone);
-  const publish = usePublishMenu(slug);
+  // In the menu's scope, so a publish waits for pending item saves instead of racing them
+  const publish = usePublishMenu(slug, menuId);
   const reschedule = useRescheduleMenu(slug, menuId);
   const update = useUpdateMenuItem(slug, menuId);
   const remove = useRemoveMenuItem(slug, menuId);
@@ -50,7 +51,8 @@ export default function MenuEditorPage() {
   // The backend refuses changes to an ended menu; the screen does not offer them
   const canChange = isOwner && !ended;
   const isDraft = data.status === "DRAFT";
-  const actionError = update.error ?? remove.error ?? publish.error;
+  // Item saves report their errors in their own row (ItemRow)
+  const actionError = remove.error ?? publish.error;
 
   return (
     <div className="flex flex-col gap-4">
@@ -96,7 +98,9 @@ export default function MenuEditorPage() {
             {isOwner && (
               <button
                 onClick={() => publish.mutate(menuId)}
-                className="min-h-10 cursor-pointer rounded-control border-theme bg-accent px-4 text-sm font-bold text-on-accent shadow-pressed"
+                // A second tap would reach an already published menu: MENU_NOT_DRAFT
+                disabled={publish.isPending}
+                className="min-h-10 cursor-pointer rounded-control border-theme bg-accent px-4 text-sm font-bold text-on-accent shadow-pressed disabled:opacity-60"
               >
                 {t("menus.publish")}
               </button>
@@ -153,6 +157,9 @@ export default function MenuEditorPage() {
   );
 }
 
+// "" and "  " are not numbers here, unlike for Number()
+const parse = (text: string) => (text.trim() === "" ? NaN : Number(text));
+
 interface ItemRowProps {
   item: ManagedMenuItem;
   canChange: boolean;
@@ -168,6 +175,9 @@ function ItemRow({ item, canChange, onSave, onRemove }: ItemRowProps) {
   const [quantity, setQuantity] = useState(String(item.quantity));
   const [sent, setSent] = useState<UpdateMenuItemRequest | null>(item);
   const [pending, setPending] = useState(0);
+  // This row's last failed save. One useMutation serves every row and only tracks its latest
+  // call, so a later save in another row would hide this error
+  const [error, setError] = useState<unknown>(null);
 
   // Follow the server only once every save has answered. Mid-way, an answer carries the values
   // of an earlier tap and would undo the later ones on screen. Saves to one menu run in order
@@ -183,11 +193,12 @@ function ItemRow({ item, canChange, onSave, onRemove }: ItemRowProps) {
     setQuantity(String(sent?.quantity ?? item.quantity));
   };
 
-  // Saves what the inputs show, if it is valid and differs from what is saved
+  // Saves what the inputs show, if it is valid and differs from what is saved. An empty field is
+  // invalid, not 0: Number("") is 0, and a cleared price would put the item on sale for free
   const save = (next: { price?: string; quantity?: string }) => {
     const change = {
-      price: Number(next.price ?? price),
-      quantity: Number(next.quantity ?? quantity),
+      price: parse(next.price ?? price),
+      quantity: parse(next.quantity ?? quantity),
     };
     const valid =
       Number.isFinite(change.price) &&
@@ -199,20 +210,28 @@ function ItemRow({ item, canChange, onSave, onRemove }: ItemRowProps) {
     setSent(change);
     setPending((count) => count + 1);
     onSave(change)
+      .then(() => setError(null))
       // A rejected save: forget what was sent, so the inputs return to the saved values
-      .catch(() => setSent(null))
+      .catch((rejected: unknown) => {
+        setSent(null);
+        setError(rejected);
+      })
       .finally(() => setPending((count) => count - 1));
   };
 
   const step = (by: number) => {
-    const next = String(Math.max(0, Number(quantity) + by));
+    // From the last valid value when the field is empty or half typed
+    const current = parse(quantity);
+    const base = Number.isInteger(current) ? current : (sent?.quantity ?? item.quantity);
+    const next = String(Math.max(0, base + by));
     setQuantity(next);
     save({ quantity: next });
   };
 
   const soldOut = Number(quantity) === 0;
+  // 44 px: the smallest touch target the accessibility guidelines recommend
   const stepButton =
-    "flex size-10 cursor-pointer items-center justify-center font-bold text-accent";
+    "flex size-11 cursor-pointer items-center justify-center text-lg font-bold text-accent";
 
   return (
     <li
@@ -246,6 +265,12 @@ function ItemRow({ item, canChange, onSave, onRemove }: ItemRowProps) {
       </div>
 
       {item.archived && <p className="text-sm text-muted">{t("menus.editor.archivedNote")}</p>}
+
+      {error !== null && (
+        <p role="alert" className="text-sm font-bold text-low">
+          {t(`apiErrors.${errorCode(error)}`)}
+        </p>
+      )}
 
       {canChange ? (
         <div className="flex flex-wrap items-center gap-2">
@@ -283,7 +308,7 @@ function ItemRow({ item, canChange, onSave, onRemove }: ItemRowProps) {
                 value={quantity}
                 onChange={(event) => setQuantity(event.target.value)}
                 onBlur={() => save({})}
-                className={`w-12 bg-transparent text-center font-bold outline-none ${soldOut ? "text-low" : ""}`}
+                className={`w-14 bg-transparent text-center font-bold outline-none ${soldOut ? "text-low" : ""}`}
               />
             </label>
             <button

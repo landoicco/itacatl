@@ -74,7 +74,7 @@ function Picker({ slug, menu }: { slug: string; menu: ManagedMenu }) {
               key={item.id}
               item={item}
               added={inMenu.has(item.id)}
-              onAdd={(quantity) => add.mutate({ itemId: item.id, quantity })}
+              onAdd={(quantity) => add.mutateAsync({ itemId: item.id, quantity })}
             />
           ))}
         </ul>
@@ -87,16 +87,24 @@ interface CatalogRowProps {
   item: CatalogItem;
   added: boolean;
   /** Adds the item at its suggested price; the owner adjusts it in the editor if needed */
-  onAdd: (quantity: number) => void;
+  onAdd: (quantity: number) => Promise<unknown>;
 }
 
 function CatalogRow({ item, added, onAdd }: CatalogRowProps) {
   const { t, i18n } = useTranslation();
   const [quantity, setQuantity] = useState("");
+  // Until the server answers, the row still looks addable; a second tap would be refused as
+  // ITEM_ALREADY_IN_MENU although the first one worked
+  const [adding, setAdding] = useState(false);
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    onAdd(Number(quantity));
+    if (adding) return;
+    setAdding(true);
+    // The sheet shows the error; the row becomes addable again
+    onAdd(Number(quantity))
+      .catch(() => undefined)
+      .finally(() => setAdding(false));
   };
 
   return (
@@ -134,7 +142,8 @@ function CatalogRow({ item, added, onAdd }: CatalogRowProps) {
           />
           <button
             type="submit"
-            className="min-h-10 cursor-pointer rounded-control border-theme bg-accent px-4 text-sm font-bold text-on-accent shadow-pressed"
+            disabled={adding}
+            className="min-h-10 cursor-pointer rounded-control border-theme bg-accent px-4 text-sm font-bold text-on-accent shadow-pressed disabled:opacity-60"
           >
             {t("menus.add.add")}
           </button>

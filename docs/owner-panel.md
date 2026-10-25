@@ -120,7 +120,8 @@ The sheet's form takes an `onSubmit` that returns a promise (`mutateAsync`), so 
 
 `MenuEditorPage` shows one menu and lets the owner change it in place, without a Save button: each change is one request.
 
-- **Price saves when the field loses focus; portions save with every tap** of − or +, and when the field loses focus after typing. "Sold out" sets the portions to 0 in one tap, the most common change during a service.
+- **Price saves when the field loses focus; portions save with every tap** of − or +, and when the field loses focus after typing. "Sold out" sets the portions to 0 in one tap, the most common change during a service. The − and + buttons are 44 px, the smallest touch target the accessibility guidelines recommend.
+- **An empty or half-typed field is a mistake, not zero.** `Number("")` is 0 in JavaScript, so a price cleared to retype it would save the item for free. The editor parses an empty field as invalid and puts the saved value back.
 - **Rescheduling** opens the same `MenuWindowSheet` as a new menu, prefilled with the menu's window, and is only offered on drafts (`MENU_NOT_DRAFT`). Publishing is offered in the draft's banner.
 - **An ended menu is shown as history**, without controls: `hasEnded()` (`menuDates.ts`) compares the menu's date and closing time with the current time in the business's zone, the same rule as the backend's `MENU_ENDED`. The backend still refuses changes; the screen just does not offer them.
 - **Adding from the catalog** opens a sheet that lists the catalog's items, searchable, with their suggested price. Archived items are not listed, since the API refuses them (`ITEM_ARCHIVED`), and items already in the menu are marked instead of offered. Each row asks for its portions before Add: the API requires them, and no default fits every item (0 would show it as sold out). The item enters at its suggested price, which the owner can change in the editor. The sheet stays open, so several items can be added in a row.
@@ -130,10 +131,14 @@ The sheet's form takes an `onSubmit` that returns a promise (`mutateAsync`), so 
 
 Three quick taps on + send three `PUT`s. Without care, they could reach the server, or come back, out of order, and an older answer would overwrite a newer one. Two pieces prevent it:
 
-1. **The mutations of one menu share a TanStack Query scope** (`scope: { id: "menu:<slug>:<id>" }` in `useMenuMutation`), so they run one after another: the second request starts when the first has answered. The backend's row lock serializes them too ([domain model](domain-model.md#concurrent-changes-to-one-menu)), but only the client can keep the answers in order.
+1. **The mutations of one menu share a TanStack Query scope** (`scope: { id: "menu:<slug>:<id>" }` in `useMenuMutation`), so they run one after another: the second request starts when the first has answered. Publishing from the editor joins the same scope (`usePublishMenu(slug, menuId)`): a price saved on blur and an immediate Publish would otherwise race, and the price's older answer could show the menu as a draft again. The backend's row lock serializes them too ([domain model](domain-model.md#concurrent-changes-to-one-menu)), but only the client can keep the answers in order.
 2. **Each row keeps what its inputs show** and follows the cache only when none of its saves is pending. Mid-way, an answer carries the values of an earlier tap and would make the field jump back. The row compares a new value with the last one it sent, not with the last answer, so "+ then −" sends both changes.
 
-When a save fails, the row forgets what it sent and returns to the saved values, and the error is shown above the items.
+When a save fails, the row forgets what it sent, returns to the saved values and shows the error in the row. The error is kept by the row, not read from the mutation: one `useMutation` serves every row and only tracks its latest call, so a later save in another row would hide it.
+
+### One tap, one request
+
+Buttons whose second tap would fail are disabled while their request is pending: Publish (a second one would find a published menu, `MENU_NOT_DRAFT`) and Add in the add-items sheet (`ITEM_ALREADY_IN_MENU`). On a slow phone connection a double tap is common, and the error would contradict what just worked. The menu list also hides Publish on a draft whose window already closed today, since the backend would answer `MENU_ENDED`; Delete stays, as an unseen draft can be deleted at any time.
 
 ## Search
 
@@ -144,7 +149,7 @@ The catalog, the add-items sheet and the marketplace's shop list filter as the u
 `ManageLayout` renders one business's panel:
 
 - **Sections are a tab bar at the bottom on a phone**, where the thumb reaches, and links in the header from the `sm` breakpoint up.
-- **The business switcher keeps the section:** from Sunny Scoops' catalog to Hilltop Paletas' catalog.
+- **The business switcher keeps the section:** from Sunny Scoops' catalog to Hilltop Paletas' catalog. The section is read from the route's segments (`useMatch`), not searched for in the path, since a slug may contain a section's name.
 - **A business the user does not belong to** redirects to `/manage` instead of rendering a page of 403s. The API would refuse every call anyway.
 - **Signing out navigates first, then signs out.** The other order would set the user to `null` while the layout is on screen, and `RequireSession` would send the page to the sign-in form instead of the marketplace.
 
@@ -195,8 +200,8 @@ Pages are tested through the real routes with the API faked by MSW (`test/server
 |---|---|
 | `api/client.test.ts` | CSRF header on changes and not on reads, empty 204, field errors, no session as `null` |
 | `features/auth/SignInPage.test.tsx` | The redirect to sign-in and back, one message for wrong credentials, the single-business shortcut, a `next` link to another site ignored |
-| `features/menus/MenuEditorPage.test.tsx` | Adding from the catalog (archived items hidden, items in the menu marked, accent-insensitive search), publishing a draft, three taps saved in order, price on blur and sold out, a rejected change put back, removing, rescheduling, an ended menu without controls, staff read-only |
-| `features/menus/MenusPage.test.tsx` | Days in the business's zone, publishing and `MENU_EMPTY`, duplicating to the next day, a rule error kept in the sheet, deleting after confirming, staff without actions |
+| `features/menus/MenuEditorPage.test.tsx` | Adding from the catalog (archived items hidden, items in the menu marked, accent-insensitive search, one request per item however many taps), a cleared field never saved as 0, a failed save's error kept in its row, publishing a draft, three taps saved in order, price on blur and sold out, a rejected change put back, removing, rescheduling, an ended menu without controls, staff read-only |
+| `features/menus/MenusPage.test.tsx` | Days in the business's zone, publishing and `MENU_EMPTY`, no Publish on a draft that already ended, duplicating to the next day, a rule error kept in the sheet, deleting after confirming, staff without actions |
 | `features/catalog/CatalogPage.test.tsx` | The catalog, search without accents, creating with a rejected field, editing, archiving; the switcher, the tabs, staff without buttons, a foreign business, an expired session, signing out |
 
 ## Gotchas

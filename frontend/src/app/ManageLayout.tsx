@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Link, Navigate, NavLink, Outlet, useLocation, useNavigate, useParams } from "react-router";
+import { Link, Navigate, NavLink, Outlet, useMatch, useNavigate, useParams } from "react-router";
 import { useCurrentUser, useMembership, useSignOut } from "@/api/session";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 
@@ -13,7 +13,7 @@ const SECTIONS = ["menus", "catalog"] as const;
 export default function ManageLayout() {
   const { t } = useTranslation();
   const { slug = "" } = useParams();
-  const location = useLocation();
+  const sectionMatch = useMatch("/manage/:slug/:section/*");
   const navigate = useNavigate();
   const { data: user } = useCurrentUser();
   const membership = useMembership(slug);
@@ -24,8 +24,9 @@ export default function ManageLayout() {
     return <Navigate to="/manage" replace />;
   }
 
-  // Switching business keeps the section: from Sunny's catalog to Hilltop's catalog
-  const section = SECTIONS.find((name) => location.pathname.includes(`/${name}`)) ?? "menus";
+  // Switching business keeps the section: from Sunny's catalog to Hilltop's catalog. Read from
+  // the route's segments, since a slug may contain a section's name ("menus-y-mas")
+  const section = SECTIONS.find((name) => name === sectionMatch?.params.section) ?? "menus";
   const tabClass = ({ isActive }: { isActive: boolean }) =>
     `flex min-h-12 flex-1 items-center justify-center font-bold sm:flex-none sm:px-3 ${
       isActive ? "text-accent" : "text-muted"
