@@ -17,7 +17,7 @@ export default function PapelPicado() {
           // Hidden past the 8th flag on a phone, so each flag keeps a readable width
           className={i >= 8 ? "hidden sm:block" : undefined}
           style={{
-            background: `var(--theme-scoop-${i % 4})`,
+            background: `var(--theme-item-${i % 4})`,
             clipPath: "polygon(0 0, 100% 0, 100% 70%, 50% 100%, 0 70%)",
           }}
         />

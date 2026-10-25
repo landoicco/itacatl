@@ -30,15 +30,15 @@
   --theme-shadow-card: 0 4px 16px rgb(122 46 143 / 0.08);
   --theme-shadow-pressed: none;
 
-  /* Flavor scoops: an item's color is picked from this palette by a hash of its name */
-  --theme-scoop-0: #ffc8dd;
-  --theme-scoop-1: #c8e6a0;
-  --theme-scoop-2: #ffb86b;
-  --theme-scoop-3: #b8d8f8;
-  --theme-scoop-4: #f6d365;
-  --theme-scoop-5: #d7b9f0;
-  --theme-scoop-6: #a8e6cf;
-  --theme-scoop-7: #f4a3a8;
+  /* Item colors: each item's dot is picked from this palette by a hash of its name (itemColor) */
+  --theme-item-0: #ffc8dd;
+  --theme-item-1: #c8e6a0;
+  --theme-item-2: #ffb86b;
+  --theme-item-3: #b8d8f8;
+  --theme-item-4: #f6d365;
+  --theme-item-5: #d7b9f0;
+  --theme-item-6: #a8e6cf;
+  --theme-item-7: #f4a3a8;
 }
 
 /* Market: papel picado colors and hand-painted sign shadows */
@@ -66,14 +66,14 @@
   --theme-shadow-card: 4px 4px 0 #23160f;
   --theme-shadow-pressed: 3px 3px 0 #23160f;
 
-  --theme-scoop-0: #c2185b;
-  --theme-scoop-1: #f4a300;
-  --theme-scoop-2: #00796b;
-  --theme-scoop-3: #6a1b9a;
-  --theme-scoop-4: #e65100;
-  --theme-scoop-5: #2e7d32;
-  --theme-scoop-6: #1565c0;
-  --theme-scoop-7: #ad1457;
+  --theme-item-0: #c2185b;
+  --theme-item-1: #f4a300;
+  --theme-item-2: #00796b;
+  --theme-item-3: #6a1b9a;
+  --theme-item-4: #e65100;
+  --theme-item-5: #2e7d32;
+  --theme-item-6: #1565c0;
+  --theme-item-7: #ad1457;
 }
 
 /* "inline" makes each utility reference the variable itself, so switching data-theme at runtime

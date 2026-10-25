@@ -10,7 +10,7 @@
     </parent>
     <groupId>dev.licaza</groupId>
     <artifactId>itacatl</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>0.1.0</version>
     <name>itacatl</name>
     <description>Backend of itacatl, a marketplace where small businesses publish dynamic menus and customers reserve food for pickup</description>
     <url>https://github.com/landoicco/itacatl</url>

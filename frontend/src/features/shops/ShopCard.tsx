@@ -1,11 +1,11 @@
 import { Link } from "react-router";
 import type { BusinessSummary } from "@/api/types";
 import OpeningStatusBadge from "@/components/OpeningStatusBadge";
-import { flavorColor } from "@/theme/flavorColor";
+import { itemColor } from "@/theme/itemColor";
 
-// Scoops and names shown on a card; the rest are counted
+// Color dots and names shown on a card; the rest are counted
 const SHOWN_ITEMS = 3;
-const SHOWN_SCOOPS = 6;
+const SHOWN_DOTS = 6;
 
 export default function ShopCard({ shop }: { shop: BusinessSummary }) {
   const items = shop.featuredItems;
@@ -26,11 +26,11 @@ export default function ShopCard({ shop }: { shop: BusinessSummary }) {
       {items.length > 0 && (
         <div className="mt-auto flex flex-col gap-2">
           <div className="flex gap-1.5" aria-hidden="true">
-            {items.slice(0, SHOWN_SCOOPS).map((name) => (
+            {items.slice(0, SHOWN_DOTS).map((name) => (
               <span
                 key={name}
                 className="size-6 rounded-full"
-                style={{ background: flavorColor(name) }}
+                style={{ background: itemColor(name) }}
               />
             ))}
           </div>

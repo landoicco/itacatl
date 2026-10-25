@@ -1,6 +1,7 @@
 {
   "header": {
-    "language": "Idioma"
+    "language": "Idioma",
+    "businessSignIn": "Para negocios"
   },
   "home": {
     "title": "Elige tu nieve, te la apartamos",
@@ -45,11 +46,135 @@
     "soldOut": "Agotado",
     "alcohol": "Contiene alcohol"
   },
+  "auth": {
+    "title": "Acceso para negocios",
+    "subtitle": "Administra tu catálogo y tus menús.",
+    "email": "Correo",
+    "password": "Contraseña",
+    "submit": "Entrar",
+    "submitting": "Entrando…",
+    "backToMarketplace": "Volver al inicio",
+    "signOut": "Cerrar sesión"
+  },
+  "manage": {
+    "greeting": "Hola, {{name}}",
+    "pickBusiness": "¿Qué negocio vas a administrar?",
+    "noBusinesses": "Tu cuenta aún no está ligada a ningún negocio.",
+    "role": {
+      "OWNER": "Dueño",
+      "STAFF": "Personal"
+    },
+    "sectionsLabel": "Secciones",
+    "switchBusiness": "Cambiar de negocio",
+    "sections": {
+      "menus": "Menús",
+      "catalog": "Catálogo"
+    }
+  },
+  "catalog": {
+    "title": "Catálogo",
+    "search": "Busca en tu catálogo",
+    "empty": "Tu catálogo está vacío.",
+    "archived_one": "Archivado ({{count}})",
+    "archived_other": "Archivados ({{count}})",
+    "suggestedPrice": "Sugerido {{price}}",
+    "newItem": "Nuevo producto",
+    "editItem": "Editar producto",
+    "edit": "Editar",
+    "archive": "Archivar",
+    "unarchive": "Desarchivar",
+    "form": {
+      "name": "Nombre",
+      "description": "Descripción",
+      "optional": "Opcional",
+      "suggestedPrice": "Precio sugerido",
+      "alcoholicHint": "Se muestra a los clientes como etiqueta",
+      "save": "Guardar",
+      "saving": "Guardando…"
+    },
+    "noMatches": "Ningún producto coincide con tu búsqueda.",
+    "allArchived": "Todos tus productos están archivados.",
+    "onlyArchivedMatch": "Solo coinciden productos archivados. Despliégalos abajo."
+  },
+  "menus": {
+    "title": "Menús",
+    "newMenu": "Nuevo menú",
+    "empty": "No hay menús de hoy en adelante.",
+    "published": "Publicado",
+    "draft": "Borrador",
+    "items_one": "{{count}} producto",
+    "items_other": "{{count}} productos",
+    "soldOut_one": "{{count}} agotado",
+    "soldOut_other": "{{count}} agotados",
+    "hidden": "los clientes aún no lo ven",
+    "emptyMenu": "Vacío · agrega productos antes de publicar",
+    "publish": "Publicar",
+    "duplicate": "Duplicar",
+    "delete": "Borrar",
+    "confirmDelete": "¿Borrar el borrador del {{day}}? Esto no se puede deshacer.",
+    "duplicateTitle": "Duplicar el menú del {{day}}",
+    "duplicateHint": "Copia sus productos con sus precios y cantidades. Los archivados se quedan fuera.",
+    "form": {
+      "date": "Fecha",
+      "opens": "Abre",
+      "closes": "Cierra",
+      "createDraft": "Crear borrador",
+      "saving": "Guardando…",
+      "save": "Guardar"
+    },
+    "editor": {
+      "change": "Cambiar fecha y hora",
+      "hidden": "Los clientes aún no ven este menú.",
+      "ended": "Este menú ya terminó. Queda como historial y no se puede cambiar.",
+      "noItems": "Este menú aún no tiene productos.",
+      "archived": "Archivado",
+      "archivedNote": "Archivado en el catálogo. Quítalo si ya no lo preparas.",
+      "remove": "Quitar {{name}}",
+      "price": "Precio de {{name}}",
+      "quantity": "Porciones de {{name}}",
+      "less": "Una porción menos de {{name}}",
+      "more": "Una porción más de {{name}}",
+      "portions_one": "{{count}} porción",
+      "portions_other": "{{count}} porciones"
+    },
+    "add": {
+      "title": "Agregar del catálogo",
+      "none": "Ningún producto coincide.",
+      "inMenu": "Ya está en este menú",
+      "portions": "Porciones",
+      "add": "Agregar"
+    }
+  },
+  "sheet": {
+    "close": "Cerrar"
+  },
+  "fieldErrors": {
+    "NotBlank": "Este campo es obligatorio.",
+    "NotNull": "Este campo es obligatorio.",
+    "Size": "Es demasiado largo.",
+    "PositiveOrZero": "No puede ser negativo.",
+    "Digits": "Usa máximo dos decimales.",
+    "Invalid": "Este valor no es válido."
+  },
   "apiErrors": {
     "BUSINESS_NOT_FOUND": "Esta nevería no existe.",
     "MENU_NOT_FOUND": "Este menú ya no está disponible.",
     "NETWORK_ERROR": "No hay conexión con el servidor. Revisa tu internet.",
     "UNKNOWN_ERROR": "Algo salió mal.",
+    "ITEM_NOT_FOUND": "Este producto ya no está en el catálogo.",
+    "MENU_ITEM_NOT_FOUND": "Este producto ya no está en el menú.",
+    "AUTHENTICATION_REQUIRED": "Tu sesión terminó. Vuelve a entrar.",
+    "INVALID_CREDENTIALS": "El correo o la contraseña no son correctos.",
+    "CSRF_TOKEN_INVALID": "La página estuvo abierta mucho tiempo. Recárgala e inténtalo de nuevo.",
+    "ACCESS_DENIED": "No tienes permiso para hacer esto.",
+    "VALIDATION_FAILED": "Revisa los campos marcados.",
+    "MALFORMED_REQUEST": "No se pudo leer parte del formulario. Revísalo e inténtalo de nuevo.",
+    "INVALID_TIME_WINDOW": "La hora de cierre debe ser después de la de apertura.",
+    "MENU_ENDED": "Este menú ya terminó, así que no se puede cambiar.",
+    "MENU_NOT_DRAFT": "Este menú ya está publicado, así que no se puede mover ni borrar.",
+    "MENU_EMPTY": "Agrega al menos un producto antes de publicar.",
+    "ITEM_ARCHIVED": "Este producto está archivado. Desarchívalo primero en el catálogo.",
+    "ITEM_ALREADY_IN_MENU": "Este producto ya está en el menú.",
     "retry": "Reintentar"
   },
   "notFound": {

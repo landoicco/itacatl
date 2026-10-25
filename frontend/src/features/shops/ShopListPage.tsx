@@ -5,21 +5,14 @@ import type { BusinessSummary } from "@/api/types";
 import ErrorMessage from "@/components/ErrorMessage";
 import SiteHeader from "@/components/SiteHeader";
 import SkeletonCards from "@/components/SkeletonCards";
+import { normalizeForSearch } from "@/i18n/format";
 import ShopCard from "./ShopCard";
 
-// Case- and accent-insensitive, so "maracuya" finds "Maracuyá"
-function normalize(text: string): string {
-  return text
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase();
-}
-
 function matches(shop: BusinessSummary, query: string): boolean {
-  const needle = normalize(query.trim());
+  const needle = normalizeForSearch(query);
   if (!needle) return true;
   return [shop.name, shop.description ?? "", ...shop.featuredItems].some((text) =>
-    normalize(text).includes(needle)
+    normalizeForSearch(text).includes(needle)
   );
 }
 

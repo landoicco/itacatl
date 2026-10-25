@@ -115,7 +115,7 @@ public interface MenuManagementService {
 - **How it runs.** Spring wraps the service bean in a proxy. Before each call, the proxy evaluates the SpEL expression: `@businessAccess` is the `BusinessAccess` bean, `authentication` the current user and `#slug` the method's argument (readable by name because Spring Boot's Maven parent compiles with `-parameters`). `false` throws `AccessDeniedException`, which becomes `403 ACCESS_DENIED`.
 - **What it checks.** `canManage` is owners only; `canView` is owners and staff. Both ask the database whether the user has one of those roles in the business with that slug, in one `exists` query. Anonymous requests never get this far (the URL rules answer 401), and `BusinessAccess` still returns `false` for them.
 - **On the interface, not the controller.** The permission is part of the service's contract: any future caller (a scheduled job, a second controller) gets the same check, and the rule is next to the method's documentation.
-- **Then the data is scoped too.** Permission on the slug is not enough on its own: a menu ID could belong to another business. The services look every ID up together with the business (`findByIdAndTenantId`), so a foreign ID answers 404, not someone else's data. Slice 3 adds Row-Level Security as a third layer in the database.
+- **Then the data is scoped too.** Permission on the slug is not enough on its own: a menu ID could belong to another business. The services look every ID up together with the business (`findByIdAndTenantId`), so a foreign ID answers 404, not someone else's data. The two answers differ on purpose: slugs are public (every business is on the marketplace), so a 403 for one reveals nothing, while a 403 for an internal ID would confirm that it exists somewhere. Slice 3 adds Row-Level Security as a third layer in the database.
 
 | Layer | Question | Answer when it fails |
 |---|---|---|
@@ -157,7 +157,7 @@ sequenceDiagram
 2. **The login request passes the `CsrfFilter`,** because its `X-XSRF-TOKEN` header matches the cookie.
 3. **`AuthController` hands the credentials to `SessionLogin`,** which asks the `AuthenticationManager` to check them. `DaoAuthenticationProvider` loads the account through `AccountUserDetailsService`, checks that it is enabled, and compares the password with bcrypt.
 4. **On success, `SessionLogin` does what a filter-based login would do:**
-   - `SessionAuthenticationStrategy` changes the session ID and replaces the CSRF token.
+   - `SessionAuthenticationStrategy` changes the session ID and replaces the CSRF token. A new ID defeats *session fixation*, where an attacker plants a session ID in the victim's browser before sign-in and reuses it afterwards.
    - The `SecurityContext` is saved in the session through the `SecurityContextRepository`.
 5. **The controller answers with the user and their businesses,** and on the way out Spring Session's filter stores the session in PostgreSQL and sends the `SESSION` cookie.
 
@@ -182,7 +182,7 @@ Security errors happen inside filters, before Spring MVC, so `@RestControllerAdv
 | `ACCESS_DENIED` | 403 | A signed-in user without that permission in the business: staff changing a menu, or anyone outside it |
 | `ACCOUNT_NOT_FOUND` | 404 | A session whose account was deleted |
 
-The client translates the code, as with every other API error ([i18n guide](i18n.md)). These codes join the frontend's catalogs with the screens that show them, in the owner panel (slice 2c); until then the client would fall back to its generic error message.
+The client translates the code, as with every other API error ([i18n guide](i18n.md)). The owner panel's sign-in form and its session handling are in the [owner panel guide](owner-panel.md#the-session).
 
 ## Passwords
 
@@ -294,38 +294,3 @@ The HTTP tests sign in through `BrowserSession`, a test helper that does what th
 - **Session cookie flags depend on the container unless declared.** Without `SessionConfig`, Spring Session copies them from the servlet context, and in MockMvc the cookie had neither `HttpOnly` nor `SameSite`.
 - **Changing `AccountPrincipal` can invalidate existing sessions,** because they hold it serialized. Keep it small and bump `serialVersionUID` on purpose.
 - **Debugging a 401 or 403:** `logging.level.org.springframework.security=DEBUG` logs the chain at startup and why each request was rejected (for example, "Invalid CSRF token found").
-
-## Interview questions
-
-**Why sessions and not JWT?**
-The client is a browser app served from the same origin, so a cookie is the natural carrier. A server-side session can be revoked at once by deleting a row, while a JWT stays valid until it expires unless you add a denylist, which is a session store again. Storing a JWT in `localStorage` exposes it to XSS; an `HttpOnly` cookie does not. JWTs shine for stateless service-to-service calls or third-party APIs, which this app does not have.
-
-**How does a request become authenticated?**
-`SessionRepositoryFilter` loads the session from PostgreSQL using the `SESSION` cookie, `SecurityContextHolderFilter` takes the `SecurityContext` out of it, and `AuthorizationFilter` checks the rule for the path. The controller reads the principal with `@AuthenticationPrincipal`.
-
-**What is session fixation and how is it prevented?**
-An attacker plants a session ID in the victim's browser before they sign in, then uses the same ID once the victim is signed in. The login endpoint changes the session ID on sign-in (`ChangeSessionIdAuthenticationStrategy`), so a planted ID becomes useless.
-
-**Why CSRF tokens if the cookie is `SameSite=Lax`?**
-Same-site is not same-origin: subdomains count as the same site. Older browsers ignore the attribute. The token is the main defense; `SameSite` is a second layer.
-
-**How are passwords stored?**
-bcrypt through `DelegatingPasswordEncoder`: salted, deliberately slow, and prefixed with the algorithm so it can be upgraded without a migration.
-
-**How do you avoid revealing which emails have an account?**
-One error code for every failed sign-in, and `DaoAuthenticationProvider` spends the same bcrypt time when the email does not exist.
-
-**Why a custom login endpoint instead of `formLogin`?**
-`formLogin` is built for server-rendered pages: form posts, redirects, HTML errors. A React app wants JSON in and JSON out. The endpoint repeats what the filter does after authenticating: a new session ID, a new CSRF token and saving the context.
-
-**What happens with two backend instances?**
-Nothing changes: sessions are in PostgreSQL, so any instance can serve any request without sticky sessions.
-
-**Why is authorization not in the session?**
-Permissions depend on the business, and they can change. Reading memberships per request means a removed membership takes effect immediately.
-
-**Why method security instead of URL rules for the management API?**
-A URL rule can say "signed in", but not "owner of the business in this path": that needs the database. `@PreAuthorize` on the service interface runs a permission bean with the method's arguments, so the rule sits next to the operation and protects it whoever calls it.
-
-**Why 404 for another business's menu, but 403 for another business's slug?**
-The slug is public: every business is on the marketplace, so saying "you may not" reveals nothing. Internal IDs are not, and a 403 would confirm that a menu with that ID exists somewhere. The scoped lookup answers as if it did not.

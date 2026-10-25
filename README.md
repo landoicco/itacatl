@@ -35,7 +35,8 @@ A work in progress, built in the open.
 | Customer UI: themes, phone and desktop layouts | ✅ Done |
 | Owner and staff accounts: Spring Security, sessions in PostgreSQL | ✅ Done |
 | Owner API: catalog, menu lifecycle, per-business permissions | ✅ Done |
-| Owner panel, tenant isolation, reservations and payments ([roadmap](docs/product-spec.md#rework-roadmap)) | 🚧 Next |
+| Owner panel: catalog and menu editor, mobile-first | ✅ Done |
+| Tenant isolation, reservations and payments ([roadmap](docs/product-spec.md#rework-roadmap)) | 🚧 Next |
 | Terraform: bootstrap, modules, CI/CD | 📋 Planned |
 | Ephemeral AWS deploy with load test and recovery evidence | 📋 Planned |
 
@@ -54,7 +55,7 @@ Open `http://localhost:3000`. The backend seeds three sample ice cream shops wit
 curl -s localhost:8080/api/businesses | jq
 ```
 
-The seed also creates two demo accounts, `ana@example.com` (owner of two shops) and `luis@example.com` (owner of one, staff in another), both with the password `itacatl-demo`. The owner panel comes in the next slice; meanwhile the [security guide](docs/security.md#signing-in) shows the sign-in flow.
+The seed also creates two demo accounts, `ana@example.com` (owner of two shops) and `luis@example.com` (owner of one, staff in another), both with the password `itacatl-demo`. Sign in with **For businesses** in the header to open the owner panel: build tomorrow's menu from the catalog, publish it, and see it on the marketplace. Luis sees Sunny Scoops read-only, as staff.
 
 The database has no persistent volume, so data resets with `docker compose down`.
 
@@ -128,6 +129,7 @@ Layers, patterns and the rules that keep them: [architecture guide](docs/archite
 - **Enforced architecture:** package-by-feature, with ESLint failing CI if one feature imports another.
 - **Server state done right:** TanStack Query for API data, a typed client that turns Problem Details into translated error codes.
 - **Tests through the network:** pages are tested on the real routes with the API faked by MSW, and the clock frozen.
+- **An owner panel built for the phone:** edits save as they happen, quick taps are sent in order, a session that ends sends the owner to sign in from any screen, and form errors come from the backend's validation ([owner panel](docs/owner-panel.md)).
 
 **Delivery**
 - **One image, every environment:** Spring profiles change configuration only; the `aws` profile logs ECS JSON for CloudWatch.
@@ -138,7 +140,7 @@ Layers, patterns and the rules that keep them: [architecture guide](docs/archite
 
 - **Backend:** Java 21, Spring Boot 4, Spring Security, Spring Session JDBC, Spring Data JPA, Flyway, Maven
 - **Frontend:** React 19, TypeScript, Vite, Tailwind CSS 4, React Router, TanStack Query, i18next
-- **Tests:** JUnit 5, Testcontainers, Vitest, Testing Library, MSW
+- **Tests:** JUnit 6, Testcontainers, Vitest, Testing Library, MSW
 - **Database:** PostgreSQL 18
 - **Infrastructure:** Docker Compose today; AWS with Terraform planned
 
@@ -188,6 +190,20 @@ npm run lint && npm test -- --run && npm run build
 
 Every pull request updates the documentation it affects, so `main` and its docs stay consistent.
 
+## Releases
+
+Versions follow [Semantic Versioning](https://semver.org), with one version for the whole repository: the backend and the frontend ship together, so `backend/pom.xml` and `frontend/package.json` always carry the same number.
+
+- **`0.y.z` until the first production deploy.** Each minor version closes a milestone of the [roadmap](docs/product-spec.md#rework-roadmap), starting with `0.1.0`: the marketplace and the owner panel. While the schema can still be squashed into a clean baseline ([ADR 0003](docs/adr/0003-squash-migrations-before-first-deploy.md)), a new version may need a fresh database.
+- **`1.0.0` with the first production deploy.** From then on, migrations are never edited and an upgrade keeps the data.
+- **Cutting a release:** the pull request that completes a milestone sets the new version in both files. Once it is merged, `main` gets an annotated tag and a GitHub Release whose notes are generated from the merged pull requests:
+
+```shell
+git tag -a v0.1.0 -m "Marketplace and owner panel"
+git push origin v0.1.0
+gh release create v0.1.0 --title "v0.1.0" --generate-notes
+```
+
 ## Documentation
 
 | Document | Contents |
@@ -195,7 +211,8 @@ Every pull request updates the documentation it affects, so `main` and its docs 
 | [Product spec](docs/product-spec.md) | Scope, domain rules, order flow, rework roadmap |
 | [Domain model](docs/domain-model.md) | Tables, tenant integrity, time handling, read and management API, errors, sample data |
 | [Architecture](docs/architecture.md) | Backend and frontend layers, patterns, enforced dependency rules, tests |
-| [Security](docs/security.md) | Spring Security, sign-in, per-business permissions, sessions in PostgreSQL, CSRF, interview questions |
+| [Security](docs/security.md) | Spring Security, sign-in, per-business permissions, sessions in PostgreSQL, CSRF |
+| [Owner panel](docs/owner-panel.md) | The panel's screens, API layer, session handling, cache updates, forms and their decisions |
 | [Theming](docs/theming.md) | Design tokens, themes and how to add a vertical |
 | [i18n guide](docs/i18n.md) | How translations are wired in, dates and times, safety nets |
 | [Infra plan](docs/infra-plan.md) | AWS architecture, cost rules, work phases |
