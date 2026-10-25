@@ -241,4 +241,5 @@ Integration tests run against PostgreSQL in Testcontainers, with Flyway enabled 
 ## Gotchas
 
 - **Run `mvn clean` after deleting or renaming a migration.** Maven copies resources into `target/classes` but never removes old ones, so a deleted `V1__…sql` stays there and Flyway fails with "Found more than one migration with version 1". CI always builds from scratch, so it only bites locally.
+- **Tests that roll back never check a deferred constraint.** `fk_menu_item_item` is checked at commit, and `@DataJpaTest` rolls every test back, so a row that breaks it is silently accepted. `TenantIntegrityIntegrationTest` runs `SET CONSTRAINTS ALL IMMEDIATE`, which makes PostgreSQL check the pending rows at that point, as the commit would.
 - **Jackson 3 is stricter than Jackson 2.** `FAIL_ON_NULL_FOR_PRIMITIVES` is on by default: a JSON field missing for a primitive (`boolean`, `int`) fails instead of becoming `false` or `0`. Optional fields use wrapper types (`Boolean alcoholic` in `SeedFile`), and required numbers stay primitive so a missing value is caught.
