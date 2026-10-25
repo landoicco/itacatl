@@ -1,6 +1,7 @@
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import type {
+  AddMenuItemRequest,
   BusinessDetail,
   BusinessSummary,
   CatalogItem,
@@ -387,6 +388,26 @@ export const handlers = [
       endsAt: `${when.endsAt}:00`,
     });
     return HttpResponse.json(menu);
+  }),
+  http.post(`${MENUS}/:id/items`, async ({ params, request }) => {
+    const { itemId, price, quantity } = (await request.json()) as AddMenuItemRequest;
+    return changeMenu(params, (menu) => {
+      const item = catalog.find(({ id }) => id === itemId);
+      if (!item) return notFound("ITEM_NOT_FOUND");
+      if (item.archived) return rule("ITEM_ARCHIVED");
+      if (menu.items.some((offered) => offered.itemId === itemId)) {
+        return rule("ITEM_ALREADY_IN_MENU");
+      }
+      // The catalog's price is only a suggestion, used when the request sets none
+      menu.items.push({
+        itemId,
+        name: item.name,
+        price: price ?? item.suggestedPrice,
+        quantity,
+        archived: false,
+      });
+      menu.items.sort((a, b) => a.name.localeCompare(b.name));
+    });
   }),
   http.put(`${MENUS}/:id/items/:itemId`, async ({ params, request }) => {
     const change = (await request.json()) as UpdateMenuItemRequest;

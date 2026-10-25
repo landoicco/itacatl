@@ -14,8 +14,9 @@ import { useMembership } from "@/api/session";
 import type { ManagedMenuItem, UpdateMenuItemRequest } from "@/api/types";
 import ErrorMessage from "@/components/ErrorMessage";
 import SkeletonCards from "@/components/SkeletonCards";
-import { formatCurrency, formatTime } from "@/i18n/format";
+import { currencySymbol, formatCurrency, formatTime } from "@/i18n/format";
 import { flavorColor } from "@/theme/flavorColor";
+import AddItemsSheet from "./AddItemsSheet";
 import { hasEnded, hhmm, useDayLabel } from "./menuDates";
 import MenuWindowSheet from "./MenuWindowSheet";
 
@@ -29,6 +30,7 @@ export default function MenuEditorPage() {
   const menuId = Number(menuIdParam);
   const isOwner = useMembership(slug)?.role === "OWNER";
   const [rescheduling, setRescheduling] = useState(false);
+  const [adding, setAdding] = useState(false);
   const menu = useManagedMenu(slug, menuId);
   const business = useBusiness(slug);
   const dayLabel = useDayLabel(business.data?.timeZone);
@@ -125,6 +127,16 @@ export default function MenuEditorPage() {
         </ul>
       )}
 
+      {canChange && (
+        <button
+          onClick={() => setAdding(true)}
+          className="min-h-12 cursor-pointer rounded-control bg-soft font-bold text-accent"
+        >
+          ＋ {t("menus.add.title")}
+        </button>
+      )}
+
+      <AddItemsSheet slug={slug} menu={data} open={adding} onClose={() => setAdding(false)} />
       <MenuWindowSheet
         title={t("menus.editor.change")}
         submitLabel={t("menus.form.save")}
@@ -239,7 +251,7 @@ function ItemRow({ item, canChange, onSave, onRemove }: ItemRowProps) {
         <div className="flex flex-wrap items-center gap-2">
           {/* The symbol is decoration; aria-label gives the input its exact name */}
           <span className="flex items-center gap-1 font-bold">
-            <span aria-hidden="true">$</span>
+            <span aria-hidden="true">{currencySymbol(i18n.language)}</span>
             <input
               aria-label={t("menus.editor.price", { name: item.name })}
               type="number"

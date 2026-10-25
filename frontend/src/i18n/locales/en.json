@@ -133,6 +133,13 @@
       "more": "One more portion of {{name}}",
       "portions_one": "{{count}} portion",
       "portions_other": "{{count}} portions"
+    },
+    "add": {
+      "title": "Add from catalog",
+      "none": "No items match.",
+      "inMenu": "Already in this menu",
+      "portions": "Portions",
+      "add": "Add"
     }
   },
   "sheet": {

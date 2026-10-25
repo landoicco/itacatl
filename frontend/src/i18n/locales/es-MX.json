@@ -133,6 +133,13 @@
       "more": "Una porción más de {{name}}",
       "portions_one": "{{count}} porción",
       "portions_other": "{{count}} porciones"
+    },
+    "add": {
+      "title": "Agregar del catálogo",
+      "none": "Ningún producto coincide.",
+      "inMenu": "Ya está en este menú",
+      "portions": "Porciones",
+      "add": "Agregar"
     }
   },
   "sheet": {

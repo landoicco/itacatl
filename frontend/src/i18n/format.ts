@@ -3,11 +3,34 @@ const CURRENCY = "MXN";
 
 // narrowSymbol prints "$" instead of "MX$" in English, which is how prices read in Mexico
 export function formatCurrency(amount: number, locale: string): string {
+  return currencyFormat(locale).format(amount);
+}
+
+/** The symbol alone, e.g. next to a price input: "$" */
+export function currencySymbol(locale: string): string {
+  return currencyFormat(locale)
+    .formatToParts(0)
+    .find((part) => part.type === "currency")!.value;
+}
+
+function currencyFormat(locale: string) {
   return new Intl.NumberFormat(locale, {
     style: "currency",
     currency: CURRENCY,
     currencyDisplay: "narrowSymbol",
-  }).format(amount);
+  });
+}
+
+/**
+ * Text as searches compare it: without case or accents, so "maracuya" finds "Maracuyá" and
+ * "VÁNILLA" finds "Vanilla". Mexican users often type without accents on a phone
+ */
+export function normalizeForSearch(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim();
 }
 
 /*

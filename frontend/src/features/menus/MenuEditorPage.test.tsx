@@ -78,6 +78,32 @@ describe("MenuEditorPage", () => {
     expect(screen.getByLabelText("Portions of Lime sorbet")).toHaveValue(20);
   });
 
+  it("adds items from the catalog at their suggested price", async () => {
+    renderRoute("/manage/sunny-scoops/menus/202");
+    fireEvent.click(await screen.findByRole("button", { name: /Add from catalog/ }));
+
+    const sheet = screen.getByRole("dialog", { name: "Add from catalog" });
+    expect(await within(sheet).findByRole("listitem", { name: "Lime sorbet" })).toHaveTextContent(
+      "Already in this menu"
+    );
+    // Archived items cannot be offered, so they are not listed
+    expect(within(sheet).queryByRole("listitem", { name: "Old flavor" })).toBeNull();
+
+    fireEvent.change(within(sheet).getByRole("searchbox"), { target: { value: "maracuya" } });
+    const maracuya = within(sheet).getByRole("listitem", { name: "Maracuyá sorbet" });
+    expect(within(sheet).queryByRole("listitem", { name: "Lime sorbet" })).toBeNull();
+    fireEvent.change(within(maracuya).getByLabelText("Portions of Maracuyá sorbet"), {
+      target: { value: "15" },
+    });
+    fireEvent.click(within(maracuya).getByRole("button", { name: "Add" }));
+
+    // The sheet stays open to add more, and the menu has the item behind it
+    expect(await within(maracuya).findByText("Already in this menu")).toBeInTheDocument();
+    const added = screen.getAllByRole("listitem", { name: "Maracuyá sorbet" })[0];
+    expect(within(added).getByLabelText("Price of Maracuyá sorbet")).toHaveValue(45);
+    expect(within(added).getByLabelText("Portions of Maracuyá sorbet")).toHaveValue(15);
+  });
+
   it("removes an item", async () => {
     renderRoute("/manage/sunny-scoops/menus/201");
 

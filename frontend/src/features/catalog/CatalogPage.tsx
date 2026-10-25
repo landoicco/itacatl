@@ -8,17 +8,9 @@ import { useMembership } from "@/api/session";
 import type { CatalogItem } from "@/api/types";
 import ErrorMessage from "@/components/ErrorMessage";
 import SkeletonCards from "@/components/SkeletonCards";
-import { formatCurrency } from "@/i18n/format";
+import { formatCurrency, normalizeForSearch } from "@/i18n/format";
 import { flavorColor } from "@/theme/flavorColor";
 import ItemSheet from "./ItemSheet";
-
-// Case- and accent-insensitive, so "maracuya" finds "Maracuyá"
-function normalize(text: string): string {
-  return text
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase();
-}
 
 /**
  * What the business knows how to make. Archived items are folded at the end, never deleted.
@@ -38,8 +30,8 @@ export default function CatalogPage() {
   if (isPending) return <SkeletonCards count={4} height="h-16" />;
   if (error) return <ErrorMessage error={error} onRetry={() => void refetch()} />;
 
-  const needle = normalize(query.trim());
-  const shown = data.filter((item) => normalize(item.name).includes(needle));
+  const needle = normalizeForSearch(query);
+  const shown = data.filter((item) => normalizeForSearch(item.name).includes(needle));
   const active = shown.filter((item) => !item.archived);
   const archived = shown.filter((item) => item.archived);
   const actionError = archive.error ?? unarchive.error;
