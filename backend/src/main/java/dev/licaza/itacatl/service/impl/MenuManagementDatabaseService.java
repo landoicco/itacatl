@@ -19,9 +19,12 @@ import dev.licaza.itacatl.repo.MenuRepository;
 import dev.licaza.itacatl.service.MenuManagementService;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.hibernate.exception.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -124,14 +127,18 @@ public class MenuManagementDatabaseService implements MenuManagementService {
 
   @Override
   public ManagedMenuDTO publish(String slug, Long menuId) {
-    Menu menu = changeableMenu(business(slug), menuId);
-    if (menu.getStatus() == MenuStatus.DRAFT) {
-      if (!menuItemRepository.existsByMenuId(menu.getId())) {
-        throw BusinessRuleException.menuEmpty(menu.getId());
-      }
-      menu.setStatus(MenuStatus.PUBLISHED);
-      log.info("✅ Menu {} published in {} for {}", menu.getId(), slug, menu.getServiceDate());
+    Business business = business(slug);
+    Menu menu = lockedMenu(business, menuId);
+    // Checked first, so a retried request is a no-op even after the menu has ended
+    if (menu.getStatus() == MenuStatus.PUBLISHED) {
+      return withItems(menu);
     }
+    checkNotEnded(business, menu);
+    if (!menuItemRepository.existsByMenuIdAndItem_ArchivedFalse(menu.getId())) {
+      throw BusinessRuleException.menuEmpty(menu.getId());
+    }
+    menu.setStatus(MenuStatus.PUBLISHED);
+    log.info("✅ Menu {} published in {} for {}", menu.getId(), slug, menu.getServiceDate());
     return withItems(menu);
   }
 
@@ -165,9 +172,12 @@ public class MenuManagementDatabaseService implements MenuManagementService {
     try {
       menuItemRepository.saveAndFlush(menuItem);
     } catch (DataIntegrityViolationException ex) {
-      // The unique constraint (menu_id, item_id) decides, instead of a check-then-insert that two
-      // concurrent requests could both pass
-      throw BusinessRuleException.itemAlreadyInMenu(item.getId());
+      // The unique constraint (menu_id, item_id) decides, instead of a check-then-insert. Any
+      // other violation is a bug, not a duplicate, and stays a 500
+      if (violates(ex, "uq_menu_item")) {
+        throw BusinessRuleException.itemAlreadyInMenu(item.getId());
+      }
+      throw ex;
     }
     return withItems(menu);
   }
@@ -189,17 +199,15 @@ public class MenuManagementDatabaseService implements MenuManagementService {
     return withItems(menu);
   }
 
-  // A menu whose day has not passed in the business's time zone. Past menus are history
+  // A menu that has not ended, locked for the change. Ended menus are history
   private Menu changeableMenu(Business business, Long menuId) {
-    Menu menu = menu(business, menuId);
-    if (menu.getServiceDate().isBefore(today(business))) {
-      throw BusinessRuleException.menuDateInPast(menu.getServiceDate());
-    }
+    Menu menu = lockedMenu(business, menuId);
+    checkNotEnded(business, menu);
     return menu;
   }
 
   private Menu draft(Business business, Long menuId) {
-    Menu menu = menu(business, menuId);
+    Menu menu = lockedMenu(business, menuId);
     if (menu.getStatus() != MenuStatus.DRAFT) {
       throw BusinessRuleException.menuNotDraft(menu.getId());
     }
@@ -239,19 +247,37 @@ public class MenuManagementDatabaseService implements MenuManagementService {
     return toDTO(menu, menuItemRepository.findByMenuIdWithItem(menu.getId()));
   }
 
-  // The window and the date, checked here rather than only by the database's CHECK constraint, so
-  // the client gets a code it can translate instead of a 500
+  // The window, checked here rather than only by the database's CHECK constraint, so the client
+  // gets a code it can translate instead of a 500. A window that already closed today counts as
+  // ended: customers would never see the menu
   private void checkWhen(Business business, MenuRequestDTO request) {
     if (!request.endsAt().isAfter(request.startsAt())) {
       throw BusinessRuleException.invalidTimeWindow();
     }
-    if (request.serviceDate().isBefore(today(business))) {
-      throw BusinessRuleException.menuDateInPast(request.serviceDate());
+    if (hasEnded(business, request.serviceDate(), request.endsAt())) {
+      throw BusinessRuleException.menuEnded(request.serviceDate(), request.endsAt());
     }
+  }
+
+  private void checkNotEnded(Business business, Menu menu) {
+    if (hasEnded(business, menu.getServiceDate(), menu.getEndsAt())) {
+      throw BusinessRuleException.menuEnded(menu.getServiceDate(), menu.getEndsAt());
+    }
+  }
+
+  // In the business's time zone, like the public API's "not ended yet"
+  private boolean hasEnded(Business business, LocalDate date, LocalTime endsAt) {
+    LocalDateTime now = LocalDateTime.now(clock.withZone(business.getTimeZone()));
+    return !LocalDateTime.of(date, endsAt).isAfter(now);
   }
 
   private LocalDate today(Business business) {
     return LocalDate.now(clock.withZone(business.getTimeZone()));
+  }
+
+  private static boolean violates(DataIntegrityViolationException ex, String constraint) {
+    return ex.getCause() instanceof ConstraintViolationException violation
+        && constraint.equalsIgnoreCase(violation.getConstraintName());
   }
 
   private Business business(String slug) {
@@ -264,6 +290,15 @@ public class MenuManagementDatabaseService implements MenuManagementService {
   private Menu menu(Business business, Long menuId) {
     return menuRepository
         .findByIdAndTenantId(menuId, business.getId())
+        .orElseThrow(() -> ResourceNotFoundException.menu(menuId));
+  }
+
+  // For every change. A publish and a removeItem on the same menu would otherwise both pass their
+  // checks and leave an empty menu published, and a reschedule could write DRAFT back over a
+  // concurrent publish. The second request waits, then sees the first one's result
+  private Menu lockedMenu(Business business, Long menuId) {
+    return menuRepository
+        .findByIdAndTenantIdForUpdate(menuId, business.getId())
         .orElseThrow(() -> ResourceNotFoundException.menu(menuId));
   }
 

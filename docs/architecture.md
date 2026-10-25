@@ -61,6 +61,7 @@ flowchart LR
 | Dependency injection | Constructors everywhere, including `Clock` | Swappable collaborators; a frozen clock in tests |
 | Multi-tenancy by discriminator | `tenant_id` + composite foreign keys | One schema for every business; the database rejects cross-tenant rows |
 | Optimistic locking | `@Version` on menu items | Concurrent reservations of the last unit cannot both succeed (slice 4) |
+| Pessimistic locking of the aggregate root | `SELECT … FOR UPDATE` on the menu before any change to it or its items | Checks and writes on one menu run one after another, so a concurrent `publish` and `removeItem` cannot leave an empty menu public ([why](domain-model.md#concurrent-changes-to-one-menu)) |
 | Batch loading | `findByTenantIdIn`, `findByMenuIdInWithItem` | A fixed number of queries per page instead of N+1 |
 | Chain of responsibility | Spring Security's filter chain | Each filter handles one concern (session, CSRF, authorization) and passes the request on or stops it |
 | Strategy | `PasswordEncoder`, `SessionAuthenticationStrategy` | The hashing algorithm and what happens to the session on sign-in are swappable objects, not code paths |

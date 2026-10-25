@@ -30,5 +30,6 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long> {
   // A menu offers each catalog item once (uq_menu_item), so the item addresses the menu item
   Optional<MenuItem> findByMenuIdAndItemId(Long menuId, Long itemId);
 
-  boolean existsByMenuId(Long menuId);
+  // Whether customers would see anything: items archived after they were added do not count
+  boolean existsByMenuIdAndItem_ArchivedFalse(Long menuId);
 }

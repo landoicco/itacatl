@@ -32,7 +32,7 @@ public interface MenuManagementService {
    * A new, empty draft. Customers do not see it until it is published.
    *
    * @throws dev.licaza.itacatl.exception.BusinessRuleException if the window ends before it starts
-   *     or the date has passed
+   *     or has already ended
    */
   @PreAuthorize("@businessAccess.canManage(authentication, #slug)")
   ManagedMenuDTO createDraft(String slug, MenuRequestDTO request);
@@ -58,10 +58,10 @@ public interface MenuManagementService {
   ManagedMenuDTO reschedule(String slug, Long menuId, MenuRequestDTO request);
 
   /**
-   * Shows the menu to customers. Publishing a published menu changes nothing.
+   * Shows the menu to customers. Publishing a published menu changes nothing, even after it ended.
    *
-   * @throws dev.licaza.itacatl.exception.BusinessRuleException if the menu has no items or is in
-   *     the past
+   * @throws dev.licaza.itacatl.exception.BusinessRuleException if the menu has no items that are
+   *     not archived, or has ended
    */
   @PreAuthorize("@businessAccess.canManage(authentication, #slug)")
   ManagedMenuDTO publish(String slug, Long menuId);
@@ -75,7 +75,7 @@ public interface MenuManagementService {
   void deleteDraft(String slug, Long menuId);
 
   /*
-   * The menu's items. Published menus can change too, until orders exist (slice 4); past menus
+   * The menu's items. Published menus can change too, until orders exist (slice 4); ended menus
    * cannot. Every change answers with the whole menu, so the panel replaces its copy.
    */
 
@@ -83,7 +83,7 @@ public interface MenuManagementService {
    * Offers a catalog item, at its suggested price unless the request sets one.
    *
    * @throws dev.licaza.itacatl.exception.BusinessRuleException if the item is archived or already
-   *     in the menu, or the menu is in the past
+   *     in the menu, or the menu has ended
    */
   @PreAuthorize("@businessAccess.canManage(authentication, #slug)")
   ManagedMenuDTO addItem(String slug, Long menuId, AddMenuItemDTO request);

@@ -88,7 +88,7 @@ class MenuManagementServiceIntegrationTest {
                 menuService.createDraft(
                     "sunny-scoops", request(TODAY.minusDays(1), "12:00", "20:00")));
 
-    assertEquals("MENU_DATE_IN_PAST", ex.getCode());
+    assertEquals("MENU_ENDED", ex.getCode());
   }
 
   @Test
@@ -229,7 +229,7 @@ class MenuManagementServiceIntegrationTest {
             BusinessRuleException.class,
             () -> menuService.removeItem("sunny-scoops", yesterday.getId(), lime.getId()));
 
-    assertEquals("MENU_DATE_IN_PAST", ex.getCode());
+    assertEquals("MENU_ENDED", ex.getCode());
   }
 
   @Test
@@ -268,7 +268,7 @@ class MenuManagementServiceIntegrationTest {
                 menuService.duplicate(
                     "sunny-scoops", draft.getId(), request(TODAY.minusDays(1), "12:00", "20:00")));
 
-    assertEquals("MENU_DATE_IN_PAST", ex.getCode());
+    assertEquals("MENU_ENDED", ex.getCode());
   }
 
   @Test
@@ -333,7 +333,7 @@ class MenuManagementServiceIntegrationTest {
         assertThrows(
             BusinessRuleException.class, () -> menuService.publish("sunny-scoops", draft.getId()));
 
-    assertEquals("MENU_DATE_IN_PAST", ex.getCode());
+    assertEquals("MENU_ENDED", ex.getCode());
   }
 
   @Test
@@ -351,7 +351,7 @@ class MenuManagementServiceIntegrationTest {
     entityManager.flush();
 
     assertFalse(menuRepository.existsById(draft.getId()));
-    assertFalse(menuItemRepository.existsByMenuId(draft.getId()));
+    assertTrue(menuItemRepository.findByMenuIdWithItem(draft.getId()).isEmpty());
     assertTrue(itemRepository.existsById(lime.getId()));
   }
 
@@ -366,6 +366,41 @@ class MenuManagementServiceIntegrationTest {
             () -> menuService.deleteDraft("sunny-scoops", published.getId()));
 
     assertEquals("MENU_NOT_DRAFT", ex.getCode());
+  }
+
+  @Test
+  void createDraft_ForAWindowThatClosedEarlierToday_IsRejected() {
+    // The clock says 11:30
+    BusinessRuleException ex =
+        assertThrows(
+            BusinessRuleException.class,
+            () -> menuService.createDraft("sunny-scoops", request(TODAY, "08:00", "11:30")));
+
+    assertEquals("MENU_ENDED", ex.getCode());
+  }
+
+  @Test
+  void publish_WhenEveryItemWasArchived_IsRejected() {
+    Item lime = itemRepository.save(item(sunny, "Lime sorbet", "40.00"));
+    Menu draft = menuRepository.save(menu(sunny, TODAY, "12:00", "20:00", MenuStatus.DRAFT));
+    menuItemRepository.save(menuItem(draft, lime, "40.00", 30));
+    lime.setArchived(true);
+
+    BusinessRuleException ex =
+        assertThrows(
+            BusinessRuleException.class, () -> menuService.publish("sunny-scoops", draft.getId()));
+
+    assertEquals("MENU_EMPTY", ex.getCode());
+  }
+
+  @Test
+  void publish_AgainAfterTheMenuEnded_ChangesNothing() {
+    Menu yesterday =
+        menuRepository.save(
+            menu(sunny, TODAY.minusDays(1), "12:00", "20:00", MenuStatus.PUBLISHED));
+
+    assertEquals(
+        MenuStatus.PUBLISHED, menuService.publish("sunny-scoops", yesterday.getId()).status());
   }
 
   private static MenuRequestDTO request(LocalDate date, String startsAt, String endsAt) {

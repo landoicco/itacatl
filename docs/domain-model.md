@@ -138,17 +138,30 @@ stateDiagram-v2
     DRAFT --> DRAFT: reschedule, change items
     DRAFT --> PUBLISHED: publish (needs an item)
     DRAFT --> [*]: delete
-    PUBLISHED --> PUBLISHED: change items until its day passes
+    PUBLISHED --> PUBLISHED: change items until it ends
 ```
 
 | Rule | Why |
 |---|---|
-| No menu is planned for, or changed on, a past date (`MENU_DATE_IN_PAST`), in the business's time zone | A past menu is history; orders (slice 4) will point at it |
+| No menu is planned for, or changed after, the end of its window (`MENU_ENDED`), in the business's time zone. A window that closed earlier today counts | An ended menu is history, and orders (slice 4) will point at it. A new menu for a window already over would never reach a customer |
 | Only drafts are rescheduled or deleted (`MENU_NOT_DRAFT`) | Customers may already plan around a published menu. A draft nobody saw can be deleted even after its date |
 | A published menu's items can still change | Stock runs out and prices get fixed during the day. Slice 4 will limit this once orders exist |
-| Publishing needs at least one item (`MENU_EMPTY`); publishing again changes nothing | An empty menu would only confuse customers; a retried request is harmless |
+| Publishing needs at least one item that is not archived (`MENU_EMPTY`); publishing again changes nothing, even after the menu ended | An empty menu would only confuse customers; a retried request is harmless |
 | Duplicating copies the source's price and quantity, and leaves archived items out | The price last charged is a better start than the catalog's suggestion; an archived item could not be added by hand either. The source may be in the past: repeating yesterday's menu is the common case |
-| A catalog item is offered once per menu (`ITEM_ALREADY_IN_MENU`), never while archived (`ITEM_ARCHIVED`) | The unique constraint decides, so two concurrent requests cannot both add it |
+| A catalog item is offered once per menu (`ITEM_ALREADY_IN_MENU`), never while archived (`ITEM_ARCHIVED`) | The unique constraint decides, so two concurrent requests cannot both add it. Only a violation of `uq_menu_item` becomes this code; any other is a bug and stays a 500 |
+
+### Concurrent changes to one menu
+
+The rules above are checks followed by a write, so two requests at once could both pass them: a `publish` sees one item while a `removeItem` deletes it, and an empty menu goes public; a `reschedule` that loaded a draft writes `DRAFT` back over a concurrent `publish`.
+
+The menu is the **root of its items** (an aggregate), so every change to a menu or its items first locks the menu's row: `findByIdAndTenantIdForUpdate`, a `@Lock(PESSIMISTIC_WRITE)` query that Hibernate turns into `SELECT … FOR UPDATE`. A second request on the same menu waits until the first commits and then sees its result. Reads take no lock.
+
+| Option | Why not here |
+|---|---|
+| `@Version` on `menu` (optimistic) | Detects a conflict instead of preventing it, so the client needs a retry or a 409 flow. And `removeItem` does not change the menu's row, so it would not catch the empty-menu case without forcing a version bump |
+| `SERIALIZABLE` transactions | Works, but every service call would need retries for serialization failures |
+
+A row lock is cheap here: transactions are short, and one owner editing one menu rarely competes with anyone. Reservations (slice 4) are the opposite, many customers on the same items, which is why `menu_item` has `@Version` for optimistic locking on stock.
 
 ## Errors
 
@@ -172,7 +185,7 @@ Errors follow [RFC 9457 Problem Details](https://www.rfc-editor.org/rfc/rfc9457)
 | 400 | `VALIDATION_FAILED` | A request body breaks its Bean Validation constraints |
 | 400 | `MALFORMED_REQUEST` | The body is not JSON, or a value has the wrong type (text where a price goes) |
 | 404 | `BUSINESS_NOT_FOUND`, `ITEM_NOT_FOUND`, `MENU_NOT_FOUND`, `MENU_ITEM_NOT_FOUND` | Missing, or belonging to another business |
-| 422 | `INVALID_TIME_WINDOW`, `MENU_DATE_IN_PAST`, `MENU_NOT_DRAFT`, `MENU_EMPTY`, `ITEM_ARCHIVED`, `ITEM_ALREADY_IN_MENU` | A well-formed request that a business rule rejects ([lifecycle](#a-menus-lifecycle)) |
+| 422 | `INVALID_TIME_WINDOW`, `MENU_ENDED`, `MENU_NOT_DRAFT`, `MENU_EMPTY`, `ITEM_ARCHIVED`, `ITEM_ALREADY_IN_MENU` | A well-formed request that a business rule rejects ([lifecycle](#a-menus-lifecycle)) |
 
 Authentication and permission errors (401, 403) are in the [security guide](security.md#a-rejected-request).
 
@@ -216,7 +229,7 @@ To add a business to the demo, add it to **both** seed files with the same item 
 | `BusinessServiceIntegrationTest` | Local opening status per business; which menus count as upcoming |
 | `MenuServiceIntegrationTest` | Menu items with the day's price; drafts are not found |
 | `CatalogServiceIntegrationTest` | Each business sees only its own items, archived ones included; text is trimmed |
-| `MenuManagementServiceIntegrationTest` | The menu rules above: past dates, drafts only, empty menus, duplicates, suggested prices, other businesses' IDs |
+| `MenuManagementServiceIntegrationTest` | The menu rules above: ended menus, drafts only, empty menus, duplicates, suggested prices, other businesses' IDs |
 | `GlobalExceptionHandlerTest` | Field errors with their constraint as code; unreadable bodies |
 | `TenantIntegrityIntegrationTest` | The composite foreign keys reject rows that mix businesses |
 | `AccountRepositoryIntegrationTest` | A user's businesses in one query, lowercase emails, one membership per user and business |
