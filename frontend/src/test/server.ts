@@ -1,6 +1,6 @@
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
-import type { BusinessDetail, BusinessSummary, MenuDetail } from "@/api/types";
+import type { BusinessDetail, BusinessSummary, CurrentUser, MenuDetail } from "@/api/types";
 
 /*
  * A fake API for component tests. MSW intercepts the real fetch calls, so tests exercise the
@@ -95,13 +95,53 @@ export const menus: Record<number, MenuDetail> = {
   ]),
 };
 
-const notFound = (code: string) =>
+const problem = (status: number, code: string) =>
   HttpResponse.json(
-    { status: 404, title: "Resource not found", detail: "Not found", code },
-    { status: 404, headers: { "Content-Type": "application/problem+json" } }
+    { status, detail: code, code },
+    { status, headers: { "Content-Type": "application/problem+json" } }
   );
+const notFound = (code: string) => problem(404, code);
+
+// The demo accounts of the seed: Ana owns two shops, Luis one
+export const PASSWORD = "itacatl-demo";
+export const accounts: Record<string, CurrentUser> = {
+  "ana@example.com": {
+    email: "ana@example.com",
+    name: "Ana",
+    businesses: [
+      { slug: "hilltop-paletas", name: "Hilltop Paletas", role: "OWNER" },
+      { slug: "sunny-scoops", name: "Sunny Scoops", role: "OWNER" },
+    ],
+  },
+  "luis@example.com": {
+    email: "luis@example.com",
+    name: "Luis",
+    businesses: [{ slug: "the-frozen-corner", name: "The Frozen Corner", role: "OWNER" }],
+  },
+};
+
+// The fake server's session; tests start signed out, or sign in with signInAs
+let session: CurrentUser | null = null;
+export const signInAs = (email: string | null) => {
+  session = email ? accounts[email] : null;
+};
 
 export const handlers = [
+  http.get("/api/auth/me", () =>
+    session ? HttpResponse.json(session) : problem(401, "AUTHENTICATION_REQUIRED")
+  ),
+  http.post("/api/auth/login", async ({ request }) => {
+    const { email, password } = (await request.json()) as { email: string; password: string };
+    if (!(email in accounts) || password !== PASSWORD) {
+      return problem(401, "INVALID_CREDENTIALS");
+    }
+    signInAs(email);
+    return HttpResponse.json(session);
+  }),
+  http.post("/api/auth/logout", () => {
+    signInAs(null);
+    return new HttpResponse(null, { status: 204 });
+  }),
   http.get("/api/businesses", () => HttpResponse.json(shops)),
   http.get("/api/businesses/:slug", ({ params }) =>
     params.slug === "sunny-scoops" ? HttpResponse.json(sunnyDetail) : notFound("BUSINESS_NOT_FOUND")

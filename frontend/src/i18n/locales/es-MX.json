@@ -1,6 +1,8 @@
 {
   "header": {
-    "language": "Idioma"
+    "language": "Idioma",
+    "businessSignIn": "Para negocios",
+    "myBusinesses": "Mis negocios"
   },
   "home": {
     "title": "Elige tu nieve, te la apartamos",
@@ -45,11 +47,52 @@
     "soldOut": "Agotado",
     "alcohol": "Contiene alcohol"
   },
+  "auth": {
+    "title": "Acceso para negocios",
+    "subtitle": "Administra tu catálogo y tus menús.",
+    "email": "Correo",
+    "password": "Contraseña",
+    "submit": "Entrar",
+    "submitting": "Entrando…",
+    "backToMarketplace": "Volver al inicio",
+    "signOut": "Cerrar sesión"
+  },
+  "manage": {
+    "greeting": "Hola, {{name}}",
+    "pickBusiness": "¿Qué negocio vas a administrar?",
+    "noBusinesses": "Tu cuenta aún no está ligada a ningún negocio.",
+    "role": {
+      "OWNER": "Dueño",
+      "STAFF": "Personal"
+    }
+  },
+  "fieldErrors": {
+    "NotBlank": "Este campo es obligatorio.",
+    "NotNull": "Este campo es obligatorio.",
+    "Size": "Es demasiado largo.",
+    "PositiveOrZero": "No puede ser negativo.",
+    "Digits": "Usa máximo dos decimales.",
+    "Invalid": "Este valor no es válido."
+  },
   "apiErrors": {
     "BUSINESS_NOT_FOUND": "Esta nevería no existe.",
     "MENU_NOT_FOUND": "Este menú ya no está disponible.",
     "NETWORK_ERROR": "No hay conexión con el servidor. Revisa tu internet.",
     "UNKNOWN_ERROR": "Algo salió mal.",
+    "ITEM_NOT_FOUND": "Este producto ya no está en el catálogo.",
+    "MENU_ITEM_NOT_FOUND": "Este producto ya no está en el menú.",
+    "AUTHENTICATION_REQUIRED": "Tu sesión terminó. Vuelve a entrar.",
+    "INVALID_CREDENTIALS": "El correo o la contraseña no son correctos.",
+    "CSRF_TOKEN_INVALID": "La página estuvo abierta mucho tiempo. Recárgala e inténtalo de nuevo.",
+    "ACCESS_DENIED": "No tienes permiso para hacer esto.",
+    "VALIDATION_FAILED": "Revisa los campos marcados.",
+    "MALFORMED_REQUEST": "No se pudo leer parte del formulario. Revísalo e inténtalo de nuevo.",
+    "INVALID_TIME_WINDOW": "La hora de cierre debe ser después de la de apertura.",
+    "MENU_ENDED": "Este menú ya terminó, así que no se puede cambiar.",
+    "MENU_NOT_DRAFT": "Este menú ya está publicado, así que no se puede mover ni borrar.",
+    "MENU_EMPTY": "Agrega al menos un producto antes de publicar.",
+    "ITEM_ARCHIVED": "Este producto está archivado. Desarchívalo primero en el catálogo.",
+    "ITEM_ALREADY_IN_MENU": "Este producto ya está en el menú.",
     "retry": "Reintentar"
   },
   "notFound": {

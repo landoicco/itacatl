@@ -1,6 +1,8 @@
 {
   "header": {
-    "language": "Language"
+    "language": "Language",
+    "businessSignIn": "For businesses",
+    "myBusinesses": "My businesses"
   },
   "home": {
     "title": "Pick a scoop, we'll save it for you",
@@ -45,11 +47,52 @@
     "soldOut": "Sold out",
     "alcohol": "Contains alcohol"
   },
+  "auth": {
+    "title": "Business sign-in",
+    "subtitle": "Manage your catalog and your menus.",
+    "email": "Email",
+    "password": "Password",
+    "submit": "Sign in",
+    "submitting": "Signing in…",
+    "backToMarketplace": "Back to the marketplace",
+    "signOut": "Sign out"
+  },
+  "manage": {
+    "greeting": "Hi, {{name}}",
+    "pickBusiness": "Which business are you managing?",
+    "noBusinesses": "Your account is not linked to any business yet.",
+    "role": {
+      "OWNER": "Owner",
+      "STAFF": "Staff"
+    }
+  },
+  "fieldErrors": {
+    "NotBlank": "This field is required.",
+    "NotNull": "This field is required.",
+    "Size": "This is too long.",
+    "PositiveOrZero": "It can't be negative.",
+    "Digits": "Use up to two decimals.",
+    "Invalid": "This value isn't valid."
+  },
   "apiErrors": {
     "BUSINESS_NOT_FOUND": "This shop does not exist.",
     "MENU_NOT_FOUND": "This menu is no longer available.",
     "NETWORK_ERROR": "Can't reach the server. Check your connection.",
     "UNKNOWN_ERROR": "Something went wrong.",
+    "ITEM_NOT_FOUND": "This item is no longer in the catalog.",
+    "MENU_ITEM_NOT_FOUND": "This item is no longer in the menu.",
+    "AUTHENTICATION_REQUIRED": "Your session has ended. Sign in again.",
+    "INVALID_CREDENTIALS": "Email or password is incorrect.",
+    "CSRF_TOKEN_INVALID": "The page was open for too long. Reload it and try again.",
+    "ACCESS_DENIED": "You don't have permission to do this.",
+    "VALIDATION_FAILED": "Some fields need your attention.",
+    "MALFORMED_REQUEST": "Part of the form couldn't be read. Check it and try again.",
+    "INVALID_TIME_WINDOW": "The closing time must be after the opening time.",
+    "MENU_ENDED": "This menu has already ended, so it can't be changed.",
+    "MENU_NOT_DRAFT": "This menu is already published, so it can't be moved or deleted.",
+    "MENU_EMPTY": "Add at least one item before publishing.",
+    "ITEM_ARCHIVED": "This item is archived. Unarchive it in the catalog first.",
+    "ITEM_ALREADY_IN_MENU": "This item is already in the menu.",
     "retry": "Try again"
   },
   "notFound": {
