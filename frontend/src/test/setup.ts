@@ -3,7 +3,7 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup, configure } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, vi } from "vitest";
 import i18n from "@/i18n";
-import { server } from "./server";
+import { resetServerState, server } from "./server";
 
 // findBy* waits 1 s by default. The first render of a test file also loads its modules, which
 // can take longer when every file runs in parallel, as in CI; a real failure still fails
@@ -21,6 +21,7 @@ afterEach(() => {
   // Clean virtual DOM and any handler a test overrode
   cleanup();
   server.resetHandlers();
+  resetServerState();
 });
 
 afterAll(() => {
@@ -29,3 +30,13 @@ afterAll(() => {
 
 // jsdom does not implement scrolling, which the router's scroll restoration calls
 window.scrollTo = vi.fn() as unknown as typeof window.scrollTo;
+
+// Nor the modal <dialog> API that Sheet uses. Only its open state matters to tests: focus
+// trapping and the top layer are the browser's job
+HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
+  this.open = true;
+};
+HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
+  this.open = false;
+  this.dispatchEvent(new Event("close"));
+};

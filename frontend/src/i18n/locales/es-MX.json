@@ -77,7 +77,24 @@
     "empty": "Tu catálogo está vacío.",
     "archived_one": "Archivado ({{count}})",
     "archived_other": "Archivados ({{count}})",
-    "suggestedPrice": "Sugerido {{price}}"
+    "suggestedPrice": "Sugerido {{price}}",
+    "newItem": "Nuevo producto",
+    "editItem": "Editar producto",
+    "edit": "Editar",
+    "archive": "Archivar",
+    "unarchive": "Desarchivar",
+    "form": {
+      "name": "Nombre",
+      "description": "Descripción",
+      "optional": "Opcional",
+      "suggestedPrice": "Precio sugerido",
+      "alcoholicHint": "Se muestra a los clientes como etiqueta",
+      "save": "Guardar",
+      "saving": "Guardando…"
+    }
+  },
+  "sheet": {
+    "close": "Cerrar"
   },
   "fieldErrors": {
     "NotBlank": "Este campo es obligatorio.",

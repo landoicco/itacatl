@@ -5,6 +5,7 @@ import type {
   BusinessSummary,
   CatalogItem,
   CurrentUser,
+  ItemRequest,
   MenuDetail,
 } from "@/api/types";
 
@@ -108,7 +109,8 @@ const problem = (status: number, code: string) =>
   );
 const notFound = (code: string) => problem(404, code);
 
-// The demo accounts of the seed: Ana owns two shops, Luis one
+// The demo accounts of the seed: Ana owns two shops, Luis one. Sofia, only in tests, works at
+// Sunny Scoops as staff, for the read-only screens
 export const PASSWORD = "itacatl-demo";
 export const accounts: Record<string, CurrentUser> = {
   "ana@example.com": {
@@ -124,9 +126,14 @@ export const accounts: Record<string, CurrentUser> = {
     name: "Luis",
     businesses: [{ slug: "the-frozen-corner", name: "The Frozen Corner", role: "OWNER" }],
   },
+  "sofia@example.com": {
+    email: "sofia@example.com",
+    name: "Sofia",
+    businesses: [{ slug: "sunny-scoops", name: "Sunny Scoops", role: "STAFF" }],
+  },
 };
 
-export const sunnyCatalog: CatalogItem[] = [
+const SUNNY_CATALOG: CatalogItem[] = [
   {
     id: 101,
     name: "Lime sorbet",
@@ -161,11 +168,48 @@ export const sunnyCatalog: CatalogItem[] = [
   },
 ];
 
-// The fake server's session; tests start signed out, or sign in with signInAs
+// The fake server's state: who is signed in, and what the management API has changed. Every test
+// starts signed out with the original data (setup.ts calls resetServerState after each one)
 let session: CurrentUser | null = null;
+let catalog: CatalogItem[] = [];
+
 export const signInAs = (email: string | null) => {
   session = email ? accounts[email] : null;
 };
+
+export function resetServerState() {
+  session = null;
+  catalog = SUNNY_CATALOG.map((item) => ({ ...item }));
+}
+resetServerState();
+
+// The management API's checks, in the backend's order: a session, then the role in the business
+function denied(slug: unknown, manage: boolean) {
+  if (!session) return problem(401, "AUTHENTICATION_REQUIRED");
+  const role = session.businesses.find((business) => business.slug === slug)?.role;
+  if (!role || (manage && role !== "OWNER")) return problem(403, "ACCESS_DENIED");
+  return null;
+}
+
+// NotBlank, the one constraint of the item form that the browser does not check
+function invalidItem(item: ItemRequest) {
+  return item.name.trim()
+    ? null
+    : HttpResponse.json(
+        { status: 400, code: "VALIDATION_FAILED", errors: [{ field: "name", code: "NotBlank" }] },
+        { status: 400, headers: { "Content-Type": "application/problem+json" } }
+      );
+}
+
+const ITEMS = "/api/manage/businesses/:slug/items";
+const catalogOf = (slug: unknown) => (slug === "sunny-scoops" ? catalog : []);
+
+function changeItem(id: unknown, change: Partial<CatalogItem>) {
+  const item = catalog.find((candidate) => candidate.id === Number(id));
+  if (!item) return notFound("ITEM_NOT_FOUND");
+  Object.assign(item, change);
+  return HttpResponse.json(item);
+}
 
 export const handlers = [
   http.get("/api/auth/me", () =>
@@ -183,10 +227,30 @@ export const handlers = [
     signInAs(null);
     return new HttpResponse(null, { status: 204 });
   }),
-  http.get("/api/manage/businesses/:slug/items", ({ params }) => {
-    if (!session) return problem(401, "AUTHENTICATION_REQUIRED");
-    return HttpResponse.json(params.slug === "sunny-scoops" ? sunnyCatalog : []);
+  http.get(
+    ITEMS,
+    ({ params }) => denied(params.slug, false) ?? HttpResponse.json(catalogOf(params.slug))
+  ),
+  http.post(ITEMS, async ({ params, request }) => {
+    const body = (await request.json()) as ItemRequest;
+    const rejected = denied(params.slug, true) ?? invalidItem(body);
+    if (rejected) return rejected;
+    const item = { ...body, id: Math.max(...catalog.map(({ id }) => id)) + 1, archived: false };
+    catalog.push(item);
+    return HttpResponse.json(item, { status: 201 });
   }),
+  http.put(`${ITEMS}/:id`, async ({ params, request }) => {
+    const body = (await request.json()) as ItemRequest;
+    return denied(params.slug, true) ?? invalidItem(body) ?? changeItem(params.id, body);
+  }),
+  http.post(
+    `${ITEMS}/:id/archive`,
+    ({ params }) => denied(params.slug, true) ?? changeItem(params.id, { archived: true })
+  ),
+  http.post(
+    `${ITEMS}/:id/unarchive`,
+    ({ params }) => denied(params.slug, true) ?? changeItem(params.id, { archived: false })
+  ),
   http.get("/api/businesses", () => HttpResponse.json(shops)),
   http.get("/api/businesses/:slug", ({ params }) =>
     params.slug === "sunny-scoops" ? HttpResponse.json(sunnyDetail) : notFound("BUSINESS_NOT_FOUND")

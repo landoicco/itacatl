@@ -75,6 +75,66 @@ describe("Catalog and the panel around it", () => {
     expect(router.state.location.search).toBe("?next=%2Fmanage%2Fsunny-scoops%2Fcatalog");
   });
 
+  it("creates an item, keeping the form when the server rejects a field", async () => {
+    renderRoute("/manage/sunny-scoops/catalog");
+    fireEvent.click(await screen.findByRole("button", { name: /New item/ }));
+
+    const sheet = screen.getByRole("dialog", { name: "New item" });
+    // Only spaces: the browser accepts it, Bean Validation's NotBlank does not
+    fireEvent.change(within(sheet).getByLabelText("Name"), { target: { value: "   " } });
+    fireEvent.change(within(sheet).getByLabelText("Suggested price"), { target: { value: "50" } });
+    fireEvent.click(within(sheet).getByRole("button", { name: "Save item" }));
+
+    expect(await within(sheet).findByText("This field is required.")).toBeInTheDocument();
+    // A screen reader announces the error with the field, not only next to it
+    expect(within(sheet).getByLabelText("Name")).toHaveAccessibleDescription(
+      "This field is required."
+    );
+    expect(within(sheet).getByLabelText("Name")).toHaveAttribute("aria-invalid", "true");
+
+    fireEvent.change(within(sheet).getByLabelText("Name"), { target: { value: "Guava sorbet" } });
+    fireEvent.click(within(sheet).getByRole("button", { name: "Save item" }));
+
+    expect(await screen.findByRole("listitem", { name: "Guava sorbet" })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("edits an item's suggested price", async () => {
+    renderRoute("/manage/sunny-scoops/catalog");
+    const lime = await screen.findByRole("listitem", { name: "Lime sorbet" });
+    fireEvent.click(within(lime).getByRole("button", { name: "Edit" }));
+
+    const sheet = screen.getByRole("dialog", { name: "Edit item" });
+    expect(within(sheet).getByLabelText("Name")).toHaveValue("Lime sorbet");
+    fireEvent.change(within(sheet).getByLabelText("Suggested price"), { target: { value: "38" } });
+    fireEvent.click(within(sheet).getByRole("button", { name: "Save item" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("listitem", { name: "Lime sorbet" })).toHaveTextContent("38.00")
+    );
+  });
+
+  it("archives and unarchives an item", async () => {
+    renderRoute("/manage/sunny-scoops/catalog");
+    const lime = await screen.findByRole("listitem", { name: "Lime sorbet" });
+
+    fireEvent.click(within(lime).getByRole("button", { name: "Archive" }));
+    expect(await screen.findByText("Archived (2)")).toBeInTheDocument();
+
+    const archived = screen.getByRole("listitem", { name: "Lime sorbet" });
+    fireEvent.click(within(archived).getByRole("button", { name: "Unarchive" }));
+    expect(await screen.findByText("Archived (1)")).toBeInTheDocument();
+  });
+
+  it("lets staff read the catalog without changing it", async () => {
+    signInAs("sofia@example.com");
+    renderRoute("/manage/sunny-scoops/catalog");
+
+    await screen.findByText("Lime sorbet");
+    expect(screen.queryByRole("button", { name: /New item/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+  });
+
   it("signs out to the marketplace", async () => {
     const { router } = renderRoute("/manage/sunny-scoops/catalog");
     await screen.findByText("Lime sorbet");

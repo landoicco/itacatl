@@ -77,7 +77,24 @@
     "empty": "Your catalog is empty.",
     "archived_one": "Archived ({{count}})",
     "archived_other": "Archived ({{count}})",
-    "suggestedPrice": "Suggested {{price}}"
+    "suggestedPrice": "Suggested {{price}}",
+    "newItem": "New item",
+    "editItem": "Edit item",
+    "edit": "Edit",
+    "archive": "Archive",
+    "unarchive": "Unarchive",
+    "form": {
+      "name": "Name",
+      "description": "Description",
+      "optional": "Optional",
+      "suggestedPrice": "Suggested price",
+      "alcoholicHint": "Shown to customers as a label",
+      "save": "Save item",
+      "saving": "Saving…"
+    }
+  },
+  "sheet": {
+    "close": "Close"
   },
   "fieldErrors": {
     "NotBlank": "This field is required.",
