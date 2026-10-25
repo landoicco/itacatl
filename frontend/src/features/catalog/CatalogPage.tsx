@@ -87,9 +87,9 @@ export default function CatalogPage() {
         <p className="py-8 text-center text-muted">
           {data.length === 0
             ? t("catalog.empty")
-            : needle
-              ? t("catalog.noMatches")
-              : t("catalog.allArchived")}
+            : archived.length > 0
+              ? t(needle ? "catalog.onlyArchivedMatch" : "catalog.allArchived")
+              : t("catalog.noMatches")}
         </p>
       )}
 

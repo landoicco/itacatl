@@ -93,7 +93,8 @@
       "saving": "Saving…"
     },
     "noMatches": "No items match your search.",
-    "allArchived": "Every item is archived."
+    "allArchived": "Every item is archived.",
+    "onlyArchivedMatch": "Only archived items match. Unfold them below."
   },
   "menus": {
     "title": "Menus",

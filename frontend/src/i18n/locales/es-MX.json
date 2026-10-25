@@ -93,7 +93,8 @@
       "saving": "Guardando…"
     },
     "noMatches": "Ningún producto coincide con tu búsqueda.",
-    "allArchived": "Todos tus productos están archivados."
+    "allArchived": "Todos tus productos están archivados.",
+    "onlyArchivedMatch": "Solo coinciden productos archivados. Despliégalos abajo."
   },
   "menus": {
     "title": "Menús",

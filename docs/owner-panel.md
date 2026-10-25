@@ -10,7 +10,7 @@ The screens where business owners and staff manage their catalog and menus, unde
 | `/manage` | Business picker; skipped when the account has one business | Signed in |
 | `/manage/:slug/menus` | Menus from today on, by day, drafts included; owners create, duplicate, publish and delete drafts | Members of the business |
 | `/manage/:slug/menus/:menuId` | One menu: add items from the catalog, price and portions of each item, sold out, remove, reschedule a draft, publish | Members of the business |
-| `/manage/:slug/catalog` | The catalog: search, archived items folded at the end; owners create, edit, archive and unarchive | Members of the business |
+| `/manage/:slug/catalog` | The catalog: search, archived items folded at the end, a message instead of an empty list (no items, no matches, only archived matches, every item archived); owners create, edit, archive and unarchive | Members of the business |
 
 The panel is mobile-first: owners update their menu from a phone during the day.
 
@@ -28,6 +28,7 @@ The panel is mobile-first: owners update their menu from a phone during the day.
 | `app/RequireSession.tsx` | The guard of `/manage` |
 | `app/ManageLayout.tsx` | The frame of one business: header, business switcher, sign-out, sections |
 | `components/Sheet.tsx` | The modal sheet used by forms |
+| `components/InlineError.tsx` | A failed action, translated, shown where it happened |
 | `features/auth/` | The sign-in page |
 | `features/account/` | The business picker |
 | `features/catalog/` | The catalog page and the item form |
@@ -45,7 +46,12 @@ All calls go through `request()` in `api/client.ts`, so the rules below hold for
 
 ### Error messages
 
-The UI never shows the backend's English `detail`. `api/errors.ts` lists the codes that have a message in the `apiErrors` catalog, and `errorCode(error)` returns one of them, or `UNKNOWN_ERROR` for anything else, so a code added to the backend later is never shown raw. Components translate it with ``t(`apiErrors.${errorCode(error)}`)``.
+The UI never shows the backend's English `detail`. `api/errors.ts` lists the codes that have a message in the `apiErrors` catalog, and `errorCode(error)` returns one of them, or `UNKNOWN_ERROR` for anything else, so a code added to the backend later is never shown raw. Two components show it:
+
+- **`InlineError`** for an action that failed where it happened: above a list, inside a form or, with `compact`, in a menu item's row.
+- **`ErrorMessage`** for a screen, or a sheet, that could not load at all. It offers a retry.
+
+Both translate the code with ``t(`apiErrors.${errorCode(error)}`)``, so no component builds the message by hand.
 
 Field errors work the same way: `fieldErrors(error)` maps each field to its Bean Validation constraint (`NotBlank`, `PositiveOrZero`…), translated from the `fieldErrors` catalog. The messages are per constraint, not per field, so a new form needs no new strings for its errors.
 
@@ -202,7 +208,7 @@ Pages are tested through the real routes with the API faked by MSW (`test/server
 | `features/auth/SignInPage.test.tsx` | The redirect to sign-in and back, one message for wrong credentials, the single-business shortcut, a `next` link to another site ignored |
 | `features/menus/MenuEditorPage.test.tsx` | Adding from the catalog (archived items hidden, items in the menu marked, accent-insensitive search, one request per item however many taps), a cleared field never saved as 0, a failed save's error kept in its row, publishing a draft, three taps saved in order, price on blur and sold out, a rejected change put back, removing, rescheduling, an ended menu without controls, staff read-only |
 | `features/menus/MenusPage.test.tsx` | Days in the business's zone, publishing and `MENU_EMPTY`, no Publish on a draft that already ended, duplicating to the next day, a rule error kept in the sheet, deleting after confirming, staff without actions |
-| `features/catalog/CatalogPage.test.tsx` | The catalog, search without accents, creating with a rejected field, editing, archiving; the switcher, the tabs, staff without buttons, a foreign business, an expired session, signing out |
+| `features/catalog/CatalogPage.test.tsx` | The catalog, search without accents, empty results explained, creating with a rejected field, editing, archiving; the switcher, the tabs, staff without buttons, a foreign business, an expired session, signing out |
 
 ## Gotchas
 

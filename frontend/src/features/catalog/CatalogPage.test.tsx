@@ -28,6 +28,18 @@ describe("Catalog and the panel around it", () => {
     expect(screen.queryByText("Lime sorbet")).not.toBeInTheDocument();
   });
 
+  it("says why the list is empty instead of showing nothing", async () => {
+    renderRoute("/manage/sunny-scoops/catalog");
+    await screen.findByText("Lime sorbet");
+
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "mango" } });
+    expect(screen.getByText("No items match your search.")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "old" } });
+    // Only an archived item matches: it sits in the folded section, not in the list
+    expect(screen.getByText("Only archived items match. Unfold them below.")).toBeInTheDocument();
+  });
+
   it("switches business and stays in the same section", async () => {
     const { router } = renderRoute("/manage/sunny-scoops/catalog");
     await screen.findByText("Lime sorbet");

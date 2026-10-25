@@ -50,7 +50,7 @@ and maps them to Tailwind's theme with `@theme inline`:
 | Type | `text-display`, `font-body` | Display family, weight and tracking; body family |
 | Shape | `rounded-card`, `rounded-control`, `border-theme` | Corner radius, outlined or borderless |
 | Depth | `shadow-card`, `shadow-pressed` | Soft shadows or hard "sign painter" offsets |
-| Palette | `--theme-scoop-0` … `--theme-scoop-7` | Item colors (below) |
+| Palette | `--theme-item-0` … `--theme-item-7` | Item colors (below) |
 
 ### Choosing the theme
 
@@ -76,10 +76,11 @@ export const THEMES = {
 
 ### Item colors
 
-Items have no color of their own, yet the UI shows a colored circle per item. `flavorColor(name)` hashes the item's name (FNV-1a) into one of the theme's eight palette slots:
+Items have no color of their own, yet the UI shows a colored circle per item. `itemColor(name)` (`theme/itemColor.ts`) hashes the item's name (FNV-1a) into one of the theme's eight palette slots:
 
 - **Stable:** the same item always gets the same color, on every visit, without storing anything.
-- **Themeable:** the result is `var(--theme-scoop-N)`, so each theme brings its own palette.
+- **Themeable:** the result is `var(--theme-item-N)`, so each theme brings its own palette.
+- **Named after items, not the demo:** the same dots color an ice cream shop's flavors and a *fonda*'s dishes, so the function and its tokens say "item", like the rest of the code.
 - **Limitation:** the color is not semantic (a lime sorbet may come out pink). If businesses want to choose, it becomes an optional field of the catalog item.
 
 ### Fonts
