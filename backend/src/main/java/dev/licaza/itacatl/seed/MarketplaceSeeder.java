@@ -3,6 +3,7 @@ package dev.licaza.itacatl.seed;
 import dev.licaza.itacatl.domain.*;
 import dev.licaza.itacatl.repo.*;
 import dev.licaza.itacatl.seed.SeedFile.*;
+import dev.licaza.itacatl.tenant.TenantContext;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -17,7 +18,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.core.io.Resource;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -41,6 +43,7 @@ public class MarketplaceSeeder {
   private final AppUserRepository userRepository;
   private final MembershipRepository membershipRepository;
   private final PasswordEncoder passwordEncoder;
+  private final TransactionTemplate transactions;
   private final Clock clock;
 
   public MarketplaceSeeder(
@@ -52,6 +55,7 @@ public class MarketplaceSeeder {
       AppUserRepository userRepository,
       MembershipRepository membershipRepository,
       PasswordEncoder passwordEncoder,
+      PlatformTransactionManager transactionManager,
       Clock clock) {
     this.businessRepository = businessRepository;
     this.hoursRepository = hoursRepository;
@@ -61,16 +65,23 @@ public class MarketplaceSeeder {
     this.userRepository = userRepository;
     this.membershipRepository = membershipRepository;
     this.passwordEncoder = passwordEncoder;
+    // Transactions started here rather than with @Transactional, since each one runs in a tenant
+    // scope that must be open before it starts
+    this.transactions = new TransactionTemplate(transactionManager);
     this.clock = clock;
   }
 
   /**
    * Loads the file into an empty marketplace; does nothing if businesses already exist.
    *
+   * <p>Each business is written in its own tenant scope and transaction, like a request would:
+   * Row-Level Security lets no scope write several businesses' rows. So the seed is not atomic: a
+   * business that fails leaves the ones before it in place. It only runs on demo databases, which
+   * are recreated after fixing the file. See docs/tenant-isolation.md.
+   *
    * @param userPassword the password of every seeded account, from configuration rather than the
    *     file, so the repository holds no credentials
    */
-  @Transactional
   public void seed(Resource file, String userPassword) {
     if (businessRepository.count() > 0) {
       log.info("⏭️ Marketplace already has businesses, skipping the seed");
@@ -82,10 +93,15 @@ public class MarketplaceSeeder {
     }
 
     SeedFile seed = read(file);
-    Map<String, AppUser> users = seedUsers(seed.users(), userPassword);
+    // Accounts, businesses and memberships belong to no tenant
+    Map<String, AppUser> users =
+        transactions.execute(status -> seedUsers(seed.users(), userPassword));
     int menus = 0;
-    for (SeedBusiness business : seed.businesses()) {
-      menus += seedBusiness(business, users);
+    for (SeedBusiness seedBusiness : seed.businesses()) {
+      Business business = transactions.execute(status -> seedBusiness(seedBusiness, users));
+      try (TenantContext.Scope scope = TenantContext.open(business.getId())) {
+        menus += transactions.execute(status -> seedCatalogAndMenus(seedBusiness, business));
+      }
     }
     log.info(
         "📦 Seeded {} businesses with {} menus and {} accounts from {}",
@@ -118,8 +134,7 @@ public class MarketplaceSeeder {
     }
   }
 
-  // Returns the number of menus created
-  private int seedBusiness(SeedBusiness seed, Map<String, AppUser> users) {
+  private Business seedBusiness(SeedBusiness seed, Map<String, AppUser> users) {
     Business business = new Business();
     business.setSlug(seed.slug());
     business.setName(seed.name());
@@ -128,7 +143,6 @@ public class MarketplaceSeeder {
     business.setAcceptsPickup(seed.acceptsPickup());
     business.setAcceptsDineIn(seed.acceptsDineIn());
     business = businessRepository.save(business);
-    Long tenantId = business.getId();
 
     for (SeedMember member : seed.members()) {
       AppUser user = users.get(AppUser.normalizeEmail(member.email()));
@@ -139,6 +153,13 @@ public class MarketplaceSeeder {
       }
       membershipRepository.save(new Membership(user.getId(), business, member.role()));
     }
+    return business;
+  }
+
+  // Returns the number of menus created. Rows still name their tenant: the seeder's test runs it
+  // all in one transaction, in the cross-tenant scope, which keeps the tenant each row is given
+  private int seedCatalogAndMenus(SeedBusiness seed, Business business) {
+    Long tenantId = business.getId();
 
     List<BusinessHours> hours =
         hoursRepository.saveAll(
