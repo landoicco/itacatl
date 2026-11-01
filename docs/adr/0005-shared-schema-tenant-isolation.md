@@ -30,5 +30,6 @@ Rejected:
 - Cross-tenant reads are explicit and listed in one place, the URL rules of `TenantConfig`.
 - Native SQL bypasses Hibernate's filter, and Row-Level Security covers it: inside a transaction with the session's tenant, outside one with no tenant at all.
 - The database has two roles: the owner, used only by Flyway, and `itacatl_app`, which every environment creates before the first migration. Slice tests connect as the owner and do not exercise the policies; full-application tests connect as `itacatl_app`.
-- The seed runs one transaction per business, so it is no longer atomic.
+- The seed runs one transaction per business, so a failure is undone by a compensating cleanup instead of a rollback.
+- Each Hibernate session costs two extra statements, to set and reset the connection's tenant.
 - How it works: [tenant isolation guide](../tenant-isolation.md).

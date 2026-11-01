@@ -10,6 +10,8 @@ import java.io.UncheckedIOException;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -74,9 +76,9 @@ public class MarketplaceSeeder {
    * Loads the file into an empty marketplace; does nothing if businesses already exist.
    *
    * <p>Each business is written in its own tenant scope and transaction, like a request would:
-   * Row-Level Security lets no scope write several businesses' rows. So the seed is not atomic: a
-   * business that fails leaves the ones before it in place. It only runs on demo databases, which
-   * are recreated after fixing the file. See docs/tenant-isolation.md.
+   * Row-Level Security lets no scope write several businesses' rows. So one transaction cannot undo
+   * a failure; the seeder deletes what it created instead, and the next start seeds from scratch.
+   * See docs/tenant-isolation.md.
    *
    * @param userPassword the password of every seeded account, from configuration rather than the
    *     file, so the repository holds no credentials
@@ -95,12 +97,19 @@ public class MarketplaceSeeder {
     // Accounts, businesses and memberships belong to no tenant
     Map<String, AppUser> users =
         transactions.execute(status -> seedUsers(seed.users(), userPassword));
+    List<Long> businessIds = new ArrayList<>();
     int menus = 0;
-    for (SeedBusiness seedBusiness : seed.businesses()) {
-      Business business = transactions.execute(status -> seedBusiness(seedBusiness, users));
-      try (TenantContext.Scope scope = TenantContext.open(business.getId())) {
-        menus += transactions.execute(status -> seedCatalogAndMenus(seedBusiness, business));
+    try {
+      for (SeedBusiness seedBusiness : seed.businesses()) {
+        Business business = transactions.execute(status -> seedBusiness(seedBusiness, users));
+        businessIds.add(business.getId());
+        try (TenantContext.Scope scope = TenantContext.open(business.getId())) {
+          menus += transactions.execute(status -> seedCatalogAndMenus(seedBusiness, business));
+        }
       }
+    } catch (RuntimeException ex) {
+      undo(businessIds, users.values(), ex);
+      throw ex;
     }
     log.info(
         "📦 Seeded {} businesses with {} menus and {} accounts from {}",
@@ -108,6 +117,24 @@ public class MarketplaceSeeder {
         menus,
         users.size(),
         file.getFilename());
+  }
+
+  // A compensating cleanup: the businesses take their rows with them (ON DELETE CASCADE), and the
+  // accounts their memberships
+  private void undo(List<Long> businessIds, Collection<AppUser> users, RuntimeException failure) {
+    log.warn(
+        "❌ Seed failed, removing the {} businesses and {} accounts it created",
+        businessIds.size(),
+        users.size());
+    try {
+      transactions.executeWithoutResult(
+          status -> {
+            businessRepository.deleteAllById(businessIds);
+            userRepository.deleteAllById(users.stream().map(AppUser::getId).toList());
+          });
+    } catch (RuntimeException cleanup) {
+      failure.addSuppressed(cleanup);
+    }
   }
 
   // Keyed by email, so businesses can reference their members

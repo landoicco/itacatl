@@ -1,5 +1,6 @@
 package dev.licaza.itacatl.tenant;
 
+import com.zaxxer.hikari.HikariDataSource;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
@@ -60,7 +61,7 @@ public class TenantConnectionProvider
       statement.setString(1, tenantId.toString());
       statement.execute();
     } catch (SQLException ex) {
-      connection.close();
+      evict(connection);
       throw ex;
     }
     return connection;
@@ -72,9 +73,19 @@ public class TenantConnectionProvider
     try (Statement statement = connection.createStatement()) {
       statement.execute("RESET app.tenant_id");
     } catch (SQLException ex) {
-      log.warn("❌ Could not reset the tenant of a pooled connection", ex);
+      log.warn("❌ Could not reset the tenant of a pooled connection, evicting it", ex);
+      evict(connection);
       throw ex;
-    } finally {
+    }
+    connection.close();
+  }
+
+  // A connection whose tenant is unknown never goes back to the pool: closing it would return it
+  // there as it is
+  private void evict(Connection connection) throws SQLException {
+    if (dataSource.isWrapperFor(HikariDataSource.class)) {
+      dataSource.unwrap(HikariDataSource.class).evictConnection(connection);
+    } else {
       connection.close();
     }
   }

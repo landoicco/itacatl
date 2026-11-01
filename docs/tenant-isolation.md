@@ -201,7 +201,7 @@ The name `itacatl_app` is fixed, like a table name: it is part of the schema's c
 |---|---|
 | docker compose | `docker/postgres/create-app-role.sh`, run by the postgres image when its data directory is created |
 | Tests | `src/test/resources/testcontainers/create-app-role.sql`, the container's init script |
-| AWS | Terraform, when the infrastructure phases are built ([infra plan](infra-plan.md)) |
+| AWS | Not decided yet: an [open decision](infra-plan.md#open-decisions) of the infrastructure phases, since the database is not reachable from outside the VPC |
 
 If it does not exist, `V4` stops with a message saying so, instead of failing on a `GRANT`. In docker compose, `DB_APP_PASSWORD` is required (`${DB_APP_PASSWORD:?…}`): without it, `docker compose up` stops before starting anything, instead of creating the role with an empty password and leaving the backend unable to connect.
 
@@ -239,6 +239,7 @@ Deleting a business still cascades to its rows: PostgreSQL runs foreign key acti
 
 - **On `getConnection(tenant)`** it takes a connection from the pool and runs `SELECT set_config('app.tenant_id', ?, false)`. `false` makes the setting last for the connection's session rather than one transaction, because Hibernate takes the connection before it begins the transaction.
 - **On `releaseConnection`** it runs `RESET app.tenant_id` before the connection goes back to the pool, so code that takes pooled connections directly (Spring Session, a `JdbcTemplate` outside any transaction) never inherits a tenant.
+- **If either statement fails**, the connection's tenant is unknown, so it is evicted from the pool (`HikariDataSource.evictConnection`) rather than closed: closing a pooled connection only returns it to the pool as it is.
 - **`getAnyConnection`**, for work outside a session such as reading metadata, sets nothing, so those connections see no business.
 
 It is a Spring bean, registered through a `HibernatePropertiesCustomizer`, because it needs the pool's `DataSource`. A `JdbcTemplate` used inside a `@Transactional` method shares the session's connection, so native SQL in a service gets the tenant too.
@@ -261,14 +262,14 @@ Row-Level Security catches **mistakes**: a query without the tenant, native SQL,
 | Requests in HTTP tests | `NONE`, then what `TenantConfig` gives them | `ServerThreadMockMvcConfig` |
 | Fixtures of full-application tests | The business they write for | `MarketplaceTestData.inScopeOf` |
 
-The seed writes like a request would: accounts and businesses first, which belong to no tenant, then each business's schedule, catalog and menus in that business's scope and its own transaction. Since Row-Level Security makes the cross-tenant scope read-only, no single scope could write them all.
+The seed writes like a request would: accounts and businesses first, which belong to no tenant, then each business's schedule, catalog and menus in that business's scope and its own transaction. Since Row-Level Security makes the cross-tenant scope read-only, no single scope could write them all, and so no single transaction can undo a failure. Instead, a failed seed runs a **compensating cleanup**: it deletes the businesses it created, which cascades to their rows, and the accounts, which cascades to their memberships. The marketplace is empty again, and the next start seeds it from scratch.
 
 ## Extending it
 
 ### A new tenant-owned table
 
 1. Add `tenant_id BIGINT NOT NULL REFERENCES business (id)` and, if other tables point to it, `UNIQUE (id, tenant_id)` for their composite foreign keys ([domain model](domain-model.md#tenant-integrity-enforced-by-the-database)).
-2. In the same migration, enable Row-Level Security with the two policies, following `V4`: `<table>_tenant` with `USING` and `WITH CHECK`, and `<table>_public_read` `FOR SELECT` if the marketplace shows it. Then grant `itacatl_app` what it needs (`GRANT SELECT, INSERT, UPDATE, DELETE ON <table> TO itacatl_app`, plus its sequence). Without the grant the application gets *permission denied*, which the full-application tests catch.
+2. In the same migration, enable Row-Level Security with the two policies, following `V4`: `<table>_tenant` with `USING` and `WITH CHECK`, and `<table>_public_read` `FOR SELECT` if the marketplace shows it. Then grant `itacatl_app` what it needs (`GRANT SELECT, INSERT, UPDATE, DELETE ON <table> TO itacatl_app`). Without the grant the application gets *permission denied*, which the full-application tests catch. Its sequence needs nothing: `V4` sets default privileges on future sequences, which are harmless without the table's grant.
 3. Annotate the entity's field with `@TenantId`.
 4. Keep looking rows up with their tenant in the services (`findByIdAndTenantId`), so the 404 for foreign IDs does not depend on the filter alone.
 5. Add cases to `TenantIsolationIntegrationTest` and `RowLevelSecurityIntegrationTest`.
@@ -318,8 +319,7 @@ Create `itacatl_app` with a password before the first migration, as `docker/post
 ## Known limitations
 
 - **The slug is resolved more than once per management request:** by the interceptor, by `BusinessAccess` for the permission, and by the service, which needs the business itself (its time zone, for instance). Each is one indexed query. Passing the business from the interceptor to the service would save them, at the cost of services that depend on a request attribute instead of their arguments.
-- **The seed is not atomic.** Each business is its own transaction, so a business whose data fails leaves the ones before it in place, and the next start skips the seed because businesses exist. The seed only runs on demo databases, which are recreated after fixing the file.
-- **A failed reset leaves the tenant on a pooled connection.** If `RESET app.tenant_id` fails, the connection still goes back to the pool. The next Hibernate session overwrites the value; code that takes the connection directly would inherit it until then. A connection that fails a statement is usually broken and discarded by the pool, and the failure is logged.
+- **Two extra statements per Hibernate session:** `set_config` when the connection is taken and `RESET` when it is released, also for Spring Session's own transactions, which go through the same transaction manager. Both are tiny and run on a connection that is already open, so the cost is a round trip each. Skipping them for tables without policies would need a second transaction manager for Spring Session, which is more complexity than the saving is worth at this scale.
 
 ## Tests
 
@@ -327,6 +327,7 @@ Create `itacatl_app` with a password before the first migration, as `docker/post
 |---|---|
 | `TenantIsolationIntegrationTest` | In a business's scope, repositories see only its rows, also through `findById` and queries that do not mention the tenant; new rows get that business and rows of another are rejected; `NONE` sees no tenant rows but still sees businesses; `CROSS_TENANT` sees all. Over HTTP, requests that start as `NONE` get the right scope from the interceptor, and leave the thread as they found it |
 | `RowLevelSecurityIntegrationTest` | With native SQL as `itacatl_app`: a business sees only its rows, cannot write or move rows into another, `CROSS_TENANT` reads every business but no drafts and cannot write, no tenant sees nothing (also on a connection taken from the pool directly), and the role is not an owner, has no `BYPASSRLS` and cannot disable the policies |
+| `MarketplaceSeederRowLevelSecurityIntegrationTest` | The seed as it runs at startup, as `itacatl_app` with no scope: every row lands in its business, and a seed that fails halfway removes what it created |
 | `TenantConfigTest` | The URL rules: marketplace reads are cross-tenant, writes under public paths get `NONE`, management URLs get their business, unknown slugs and other URLs get `NONE` |
 | `TenantScopeInterceptorTest` | A completed request, and an async one that releases its thread, leave the thread without their tenant |
 | `TenantContextTest` | Scopes nest and restore the previous tenant; a scope is invisible to other threads |

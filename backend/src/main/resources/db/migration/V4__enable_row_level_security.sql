@@ -81,3 +81,6 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON
     spring_session, spring_session_attributes
     TO itacatl_app;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO itacatl_app;
+-- Sequences of future tables too: a sequence gives nothing without INSERT on its table, which stays
+-- an explicit grant
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO itacatl_app;
