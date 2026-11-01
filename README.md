@@ -36,7 +36,9 @@ A work in progress, built in the open.
 | Owner and staff accounts: Spring Security, sessions in PostgreSQL | ✅ Done |
 | Owner API: catalog, menu lifecycle, per-business permissions | ✅ Done |
 | Owner panel: catalog and menu editor, mobile-first | ✅ Done |
-| Tenant isolation, reservations and payments ([roadmap](docs/product-spec.md#rework-roadmap)) | 🚧 Next |
+| Tenant isolation: Hibernate tenant filter | ✅ Done |
+| Tenant isolation: PostgreSQL Row-Level Security | 🚧 Next |
+| Reservations and payments ([roadmap](docs/product-spec.md#rework-roadmap)) | 📋 Planned |
 | Terraform: bootstrap, modules, CI/CD | 📋 Planned |
 | Ephemeral AWS deploy with load test and recovery evidence | 📋 Planned |
 
@@ -116,7 +118,7 @@ Layers, patterns and the rules that keep them: [architecture guide](docs/archite
 ## Engineering highlights
 
 **Backend**
-- **Tenant integrity in the schema:** composite foreign keys `(id, tenant_id)` make PostgreSQL reject any row that mixes two businesses, whatever the code does.
+- **Tenant isolation in layers:** Hibernate's `@TenantId` adds the request's business to every query and insert, failing closed when no business is set, and composite foreign keys `(id, tenant_id)` make PostgreSQL reject any row that mixes two businesses ([tenant isolation](docs/tenant-isolation.md)).
 - **Deterministic time:** schedules are local times plus a zone ID, and "now" comes from an injected `Clock`, so opening hours are tested at a frozen moment.
 - **No N+1:** the shop list loads every shop's hours and next menu in a fixed number of queries.
 - **Real database in tests:** integration tests run against PostgreSQL in Testcontainers, which also validates every Flyway migration.
@@ -212,6 +214,7 @@ gh release create v0.1.0 --title "v0.1.0" --notes-file release-desc-body.md
 | [Domain model](docs/domain-model.md) | Tables, tenant integrity, time handling, read and management API, errors, sample data |
 | [Architecture](docs/architecture.md) | Backend and frontend layers, patterns, enforced dependency rules, tests |
 | [Security](docs/security.md) | Spring Security, sign-in, per-business permissions, sessions in PostgreSQL, CSRF |
+| [Tenant isolation](docs/tenant-isolation.md) | How businesses' data is kept apart: Hibernate `@TenantId`, tenant scopes, which tenant each caller runs as, traps |
 | [Owner panel](docs/owner-panel.md) | The panel's screens, API layer, session handling, cache updates, forms and their decisions |
 | [Theming](docs/theming.md) | Design tokens, themes and how to add a vertical |
 | [i18n guide](docs/i18n.md) | How translations are wired in, dates and times, safety nets |

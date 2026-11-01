@@ -115,13 +115,15 @@ public interface MenuManagementService {
 - **How it runs.** Spring wraps the service bean in a proxy. Before each call, the proxy evaluates the SpEL expression: `@businessAccess` is the `BusinessAccess` bean, `authentication` the current user and `#slug` the method's argument (readable by name because Spring Boot's Maven parent compiles with `-parameters`). `false` throws `AccessDeniedException`, which becomes `403 ACCESS_DENIED`.
 - **What it checks.** `canManage` is owners only; `canView` is owners and staff. Both ask the database whether the user has one of those roles in the business with that slug, in one `exists` query. Anonymous requests never get this far (the URL rules answer 401), and `BusinessAccess` still returns `false` for them.
 - **On the interface, not the controller.** The permission is part of the service's contract: any future caller (a scheduled job, a second controller) gets the same check, and the rule is next to the method's documentation.
-- **Then the data is scoped too.** Permission on the slug is not enough on its own: a menu ID could belong to another business. The services look every ID up together with the business (`findByIdAndTenantId`), so a foreign ID answers 404, not someone else's data. The two answers differ on purpose: slugs are public (every business is on the marketplace), so a 403 for one reveals nothing, while a 403 for an internal ID would confirm that it exists somewhere. Slice 3 adds Row-Level Security as a third layer in the database.
+- **Then the data is scoped too.** Permission on the slug is not enough on its own: a menu ID could belong to another business. The services look every ID up together with the business (`findByIdAndTenantId`), so a foreign ID answers 404, not someone else's data. The two answers differ on purpose: slugs are public (every business is on the marketplace), so a 403 for one reveals nothing, while a 403 for an internal ID would confirm that it exists somewhere.
+- **And Hibernate filters underneath.** Each management request runs in its business's tenant scope, so even a query that forgot the business would only see that business's rows ([tenant isolation](tenant-isolation.md)). Slice 3b adds Row-Level Security in the database below that.
 
 | Layer | Question | Answer when it fails |
 |---|---|---|
 | URL rules (`authorizeHttpRequests`) | Is someone signed in? | 401 `AUTHENTICATION_REQUIRED` |
 | Method security (`@PreAuthorize`) | Is this user an owner, or a member, of this business? | 403 `ACCESS_DENIED` |
 | Tenant-scoped queries | Does this ID belong to this business? | 404 `…_NOT_FOUND` |
+| Hibernate tenant filter (`@TenantId`) | Does this row belong to the request's business, whatever the query says? | Not found, like the row above |
 
 ## A request, step by step
 
@@ -263,7 +265,7 @@ A page on another origin cannot read the cookie (same-origin policy), so it cann
 ## Extending
 
 - **A new endpoint** under `/api` needs a signed-in user automatically. A public one must be added to the `permitAll` rules on purpose, with the narrowest method and path.
-- **A new management operation:** take the business's `slug` as a parameter of the service method and annotate it with `canManage` or `canView`. Look up any ID with the business's ID as well, and add the role checks to the controller's integration test.
+- **A new management operation:** take the business's `slug` as a parameter of the service method and annotate it with `canManage` or `canView`. Look up any ID with the business's ID as well, and add the role checks to the controller's integration test. Under `/api/manage/businesses/{slug}/`, the request also gets its business's tenant scope ([tenant isolation](tenant-isolation.md#a-new-endpoint)).
 - **A new role:** add it to `MembershipRole` and to the `ck_membership_role` constraint in a new migration, then decide in `BusinessAccess` what it may do.
 - **A stronger password algorithm:** change the default of the `DelegatingPasswordEncoder`. Old hashes keep verifying through their prefix; implementing `UserDetailsPasswordService` would rehash them as users sign in.
 - **Signing a user out everywhere:** Spring Session's `FindByIndexNameSessionRepository` finds every session of a principal (the indexed `principal_name` column), and deleting them ends those sessions.
