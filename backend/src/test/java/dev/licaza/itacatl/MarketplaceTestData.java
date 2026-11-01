@@ -1,14 +1,26 @@
 package dev.licaza.itacatl;
 
 import dev.licaza.itacatl.domain.*;
+import dev.licaza.itacatl.tenant.TenantContext;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.function.Supplier;
 
 /** Builders for marketplace entities, so tests only spell out what they are about. */
 public final class MarketplaceTestData {
 
   private MarketplaceTestData() {}
+
+  /**
+   * Runs {@code work} in the business's tenant scope. Full-application tests write a business's
+   * rows this way, since Row-Level Security lets the cross-tenant scope only read.
+   */
+  public static <T> T inScopeOf(Business business, Supplier<T> work) {
+    try (TenantContext.Scope scope = TenantContext.open(business.getId())) {
+      return work.get();
+    }
+  }
 
   public static Business business(String slug, String name) {
     Business business = new Business();

@@ -6,8 +6,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import dev.licaza.itacatl.AppRoleTestcontainersConfiguration;
 import dev.licaza.itacatl.ServerThreadMockMvcConfig;
-import dev.licaza.itacatl.TestcontainersConfiguration;
 import dev.licaza.itacatl.domain.AppUser;
 import dev.licaza.itacatl.domain.Business;
 import dev.licaza.itacatl.domain.Membership;
@@ -34,7 +34,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 // sessions in PostgreSQL, the way the React app will use it
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import({TestcontainersConfiguration.class, ServerThreadMockMvcConfig.class})
+@Import({AppRoleTestcontainersConfiguration.class, ServerThreadMockMvcConfig.class})
 @ActiveProfiles("test")
 class AuthControllerIntegrationTest {
 

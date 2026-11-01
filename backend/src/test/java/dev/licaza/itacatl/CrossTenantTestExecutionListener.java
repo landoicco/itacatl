@@ -6,9 +6,11 @@ import org.springframework.test.context.TestContext;
 import org.springframework.test.context.TestExecutionListener;
 
 /**
- * Runs every test in the cross-tenant scope, as the seed does: fixtures build several businesses in
- * one transaction and set each row's tenant explicitly. Registered for all tests in
- * META-INF/spring.factories. TenantIsolationIntegrationTest opens narrower scopes inside it.
+ * Runs every test in the cross-tenant scope: slice tests build several businesses in one
+ * transaction and set each row's tenant explicitly. They connect as the tables' owner, so Row-Level
+ * Security does not stop those writes; full-application tests connect as itacatl_app and write each
+ * business's rows in its own scope (MarketplaceTestData.inScopeOf). Registered for all tests in
+ * META-INF/spring.factories.
  */
 public class CrossTenantTestExecutionListener implements TestExecutionListener, Ordered {
 
