@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import dev.licaza.itacatl.BrowserSession;
+import dev.licaza.itacatl.ServerThreadMockMvcConfig;
 import dev.licaza.itacatl.TestcontainersConfiguration;
 import dev.licaza.itacatl.domain.AppUser;
 import dev.licaza.itacatl.domain.Business;
@@ -28,7 +29,7 @@ import org.springframework.test.web.servlet.MockMvc;
 // Who may read and change a catalog, over HTTP with real sign-in, method security and validation
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import(TestcontainersConfiguration.class)
+@Import({TestcontainersConfiguration.class, ServerThreadMockMvcConfig.class})
 @ActiveProfiles("test")
 class CatalogControllerIntegrationTest {
 

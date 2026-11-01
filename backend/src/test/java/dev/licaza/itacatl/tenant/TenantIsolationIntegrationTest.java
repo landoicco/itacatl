@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import dev.licaza.itacatl.BrowserSession;
+import dev.licaza.itacatl.ServerThreadMockMvcConfig;
 import dev.licaza.itacatl.TestcontainersConfiguration;
 import dev.licaza.itacatl.domain.*;
 import dev.licaza.itacatl.repo.*;
@@ -32,7 +33,7 @@ import org.springframework.test.web.servlet.MockMvc;
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import(TestcontainersConfiguration.class)
+@Import({TestcontainersConfiguration.class, ServerThreadMockMvcConfig.class})
 @ActiveProfiles("test")
 class TenantIsolationIntegrationTest {
 
@@ -130,33 +131,30 @@ class TenantIsolationIntegrationTest {
     }
   }
 
-  // The requests below start in NONE, like a server thread, so only the interceptor's scope can
-  // make the data visible
+  // The requests below start in NONE, like a server thread (ServerThreadMockMvcConfig), so only
+  // the interceptor's scope can make the data visible
   @Test
   void publicRequest_ReadsAcrossBusinesses() throws Exception {
-    try (TenantContext.Scope scope = TenantContext.open(TenantContext.NONE)) {
-      mockMvc
-          .perform(get("/api/menus/{id}", cornersMenu.getId()))
-          .andExpect(status().isOk())
-          .andExpect(jsonPath("$.items", hasSize(1)));
+    mockMvc
+        .perform(get("/api/menus/{id}", cornersMenu.getId()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items", hasSize(1)));
 
-      assertEquals(TenantContext.NONE, TenantContext.current());
-    }
+    // The test's own scope is back
+    assertEquals(TenantContext.CROSS_TENANT, TenantContext.current());
   }
 
   @Test
   void managementRequest_ReadsOnlyTheBusinessInTheUrl() throws Exception {
-    try (TenantContext.Scope scope = TenantContext.open(TenantContext.NONE)) {
-      BrowserSession ana = BrowserSession.signIn(mockMvc, "ana@example.com", PASSWORD);
+    BrowserSession ana = BrowserSession.signIn(mockMvc, "ana@example.com", PASSWORD);
 
-      mockMvc
-          .perform(get("/api/manage/businesses/sunny-scoops/items").with(ana.cookies()))
-          .andExpect(status().isOk())
-          .andExpect(jsonPath("$", hasSize(1)))
-          .andExpect(jsonPath("$[0].id").value(sunnysItem.getId()));
+    mockMvc
+        .perform(get("/api/manage/businesses/sunny-scoops/items").with(ana.cookies()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$", hasSize(1)))
+        .andExpect(jsonPath("$[0].id").value(sunnysItem.getId()));
 
-      assertEquals(TenantContext.NONE, TenantContext.current());
-    }
+    assertEquals(TenantContext.CROSS_TENANT, TenantContext.current());
   }
 
   private static List<Long> ids(List<Item> items) {
