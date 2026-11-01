@@ -28,5 +28,7 @@ Rejected:
 - A tenant-owned query cannot leave its business by accident, and a code path that forgets to open a scope sees no tenant data instead of all of it.
 - Code that runs outside a request (the seed, scheduled jobs in slice 4) must open a scope before calling a transactional service, and a transaction cannot switch tenants.
 - Cross-tenant reads are explicit and listed in one place, the URL rules of `TenantConfig`.
-- Native SQL bypasses Hibernate's filter until Row-Level Security covers it.
+- Native SQL bypasses Hibernate's filter, and Row-Level Security covers it: inside a transaction with the session's tenant, outside one with no tenant at all.
+- The database has two roles: the owner, used only by Flyway, and `itacatl_app`, which every environment creates before the first migration. Slice tests connect as the owner and do not exercise the policies; full-application tests connect as `itacatl_app`.
+- The seed runs one transaction per business, so it is no longer atomic.
 - How it works: [tenant isolation guide](../tenant-isolation.md).

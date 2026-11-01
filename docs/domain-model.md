@@ -56,7 +56,7 @@ CONSTRAINT fk_menu_item_item FOREIGN KEY (item_id, tenant_id)
 
 A menu item can only point to a menu and an item **of the same business**: PostgreSQL rejects anything else, whatever the application code does. `TenantIntegrityIntegrationTest` proves it. The parents declare `UNIQUE (id, tenant_id)`, which a composite foreign key needs as its target.
 
-This is the database's layer of tenant isolation. Above it, Hibernate's `@TenantId` adds the tenant to every query and insert of the application ([tenant isolation](tenant-isolation.md)); slice 3b adds PostgreSQL Row-Level Security.
+This keeps rows consistent. Which rows a connection may see and write is decided by two more layers ([tenant isolation](tenant-isolation.md)): Hibernate's `@TenantId` adds the tenant to every query and insert of the application, and PostgreSQL's Row-Level Security policies (`V4`) apply it to every statement, whatever sends it.
 
 The application's tenant scopes use `0` (every business) and `-1` (none), so `ck_business_id CHECK (id > 0)` keeps them from ever naming a real business.
 
@@ -235,6 +235,7 @@ To add a business to the demo, add it to **both** seed files with the same item 
 | `GlobalExceptionHandlerTest` | Field errors with their constraint as code; unreadable bodies |
 | `TenantIntegrityIntegrationTest` | The composite foreign keys reject rows that mix businesses |
 | `TenantIsolationIntegrationTest` | Hibernate's tenant filter: in one business's scope, no query sees or creates another's rows ([tenant isolation](tenant-isolation.md#tests)) |
+| `RowLevelSecurityIntegrationTest` | The database's policies, with native SQL: no business reads or writes another's rows, the marketplace reads without drafts and cannot write |
 | `AccountRepositoryIntegrationTest` | A user's businesses in one query, lowercase emails, one membership per user and business |
 | `BusinessControllerIntegrationTest` | The HTTP contract: local ISO dates, Problem Details |
 | `MarketplaceSeederIntegrationTest` | Every seed file loads, follows the schedules, creates accounts that can sign in and is idempotent |

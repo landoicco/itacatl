@@ -31,7 +31,7 @@ flowchart LR
 ```
 
 - **Backend:** an Auto Scaling group of one instance using a mixed instances policy with spot capacity (`price-capacity-optimized` across several Graviton types) and capacity rebalancing. The ASG replaces the instance when it is reclaimed or fails. A variable switches to on-demand. The instance runs the backend image with Docker; the database never runs on it.
-- **Database:** RDS PostgreSQL (PostGIS as an extension), smallest Graviton class, single-AZ, automated backups. The master password is managed by RDS in Secrets Manager.
+- **Database:** RDS PostgreSQL (PostGIS as an extension), smallest Graviton class, single-AZ, automated backups. The master password is managed by RDS in Secrets Manager. The master user owns the tables and runs Flyway; the backend connects as `itacatl_app`, a role subject to Row-Level Security, which must exist before the first migration ([tenant isolation](tenant-isolation.md#two-database-roles)). Its password is an SSM SecureString, which adds no cost.
 - **Frontend:** static build in S3, served by CloudFront. Same origin for the app and `/api`, so no CORS in AWS.
 - **Notifications:** the backend publishes to SQS; a Lambda outside the VPC sends the WhatsApp messages. Reservations stay synchronous, because they must check stock before confirming.
 - **Images:** ECR with a lifecycle policy that keeps the last few tags.
@@ -169,3 +169,4 @@ The product rework ([roadmap in the product spec](product-spec.md#rework-roadmap
 - Production domain.
 - CloudFront flat-rate free plan (includes WAF) if compatible with an EC2 origin; otherwise rate limiting in Spring with Bucket4j.
 - CloudFront VPC origins, which would move the instance to a private subnet and drop the public IPv4 cost, at the price of needing another way out to the internet.
+- How `itacatl_app` is created in RDS. The Terraform PostgreSQL provider needs network access to the database, which is not public; the alternatives are a one-time step through SSM Session Manager on the instance, or the backend creating it at startup with the master credentials before Flyway runs.

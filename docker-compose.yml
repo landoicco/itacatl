@@ -13,7 +13,7 @@ services:
       # Flyway migrates as the tables' owner; the application connects as itacatl_app
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
-      - DB_APP_PASSWORD=${DB_APP_PASSWORD}
+      - DB_APP_PASSWORD=${DB_APP_PASSWORD:?Set DB_APP_PASSWORD in .env (see .env.example)}
       - SPRING_PROFILES_ACTIVE=local
     # Budget for the 2 GiB demo instance: backend 1 GiB, database 512 MiB, the rest for the OS
     deploy:
@@ -61,7 +61,7 @@ services:
       - POSTGRES_USER=${DB_USER}
       - POSTGRES_PASSWORD=${DB_PASSWORD}
       - POSTGRES_DB=${DB_NAME}
-      - DB_APP_PASSWORD=${DB_APP_PASSWORD}
+      - DB_APP_PASSWORD=${DB_APP_PASSWORD:?Set DB_APP_PASSWORD in .env (see .env.example)}
     volumes:
       # Runs once, on an empty data directory: creates the application's role
       - ./docker/postgres/create-app-role.sh:/docker-entrypoint-initdb.d/create-app-role.sh:ro
