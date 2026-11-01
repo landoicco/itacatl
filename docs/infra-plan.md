@@ -112,6 +112,8 @@ Every Dependabot PR goes through the same CI and ruleset as any other change.
 
 **Runtime versions** (Java 21 and Node 22, both LTS) are upgraded by hand, because they must change together in `flake.nix`, the CI workflow, both Dockerfiles and `pom.xml` (`java.version`). Dependabot ignores them: major updates of the base images, the `maven` builder image (its tag embeds the JDK version, so a "minor" tag update can switch Java), and major updates of `@types/node`.
 
+**Majors blocked by the ecosystem** are ignored until their tools catch up, each with its reason next to the rule: TypeScript 7, because `typescript-eslint` 8 declares `typescript <6.1` as its peer and `npm ci` refuses the combination. The rule is removed when `typescript-eslint` supports the new major.
+
 **Ruleset on `main`** (configured in GitHub under *Settings → Rules → Rulesets*):
 
 - Restrict deletions and block force pushes.
