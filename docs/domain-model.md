@@ -56,7 +56,9 @@ CONSTRAINT fk_menu_item_item FOREIGN KEY (item_id, tenant_id)
 
 A menu item can only point to a menu and an item **of the same business**: PostgreSQL rejects anything else, whatever the application code does. `TenantIntegrityIntegrationTest` proves it. The parents declare `UNIQUE (id, tenant_id)`, which a composite foreign key needs as its target.
 
-This is the first layer of tenant isolation. Slice 3 adds Hibernate `@TenantId` and PostgreSQL Row-Level Security.
+This is the database's layer of tenant isolation. Above it, Hibernate's `@TenantId` adds the tenant to every query and insert of the application ([tenant isolation](tenant-isolation.md)); slice 3b adds PostgreSQL Row-Level Security.
+
+The application's tenant scopes use `0` (every business) and `-1` (none), so `ck_business_id CHECK (id > 0)` keeps them from ever naming a real business.
 
 ### Optimistic locking on stock
 
@@ -232,6 +234,7 @@ To add a business to the demo, add it to **both** seed files with the same item 
 | `MenuManagementServiceIntegrationTest` | The menu rules above: ended menus, drafts only, empty menus, duplicates, suggested prices, other businesses' IDs |
 | `GlobalExceptionHandlerTest` | Field errors with their constraint as code; unreadable bodies |
 | `TenantIntegrityIntegrationTest` | The composite foreign keys reject rows that mix businesses |
+| `TenantIsolationIntegrationTest` | Hibernate's tenant filter: in one business's scope, no query sees or creates another's rows ([tenant isolation](tenant-isolation.md#tests)) |
 | `AccountRepositoryIntegrationTest` | A user's businesses in one query, lowercase emails, one membership per user and business |
 | `BusinessControllerIntegrationTest` | The HTTP contract: local ISO dates, Problem Details |
 | `MarketplaceSeederIntegrationTest` | Every seed file loads, follows the schedules, creates accounts that can sign in and is idempotent |

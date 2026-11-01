@@ -7,6 +7,7 @@ import java.util.Optional;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.TenantId;
 
 /** Replaces the weekly schedule on one date: closed all day, or open with special hours. */
 @Entity
@@ -20,7 +21,8 @@ public class ScheduleException {
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
 
-  private Long tenantId;
+  // Hibernate adds "tenant_id = ?" to every query and fills it on insert (see TenantContext)
+  @TenantId private Long tenantId;
 
   private LocalDate date;
 

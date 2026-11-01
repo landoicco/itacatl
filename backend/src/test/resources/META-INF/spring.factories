@@ -1,0 +1,2 @@
+# Added to Spring's default listeners for every test class (see CrossTenantTestExecutionListener)
+org.springframework.test.context.TestExecutionListener=dev.licaza.itacatl.CrossTenantTestExecutionListener

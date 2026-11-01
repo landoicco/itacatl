@@ -14,6 +14,7 @@ sequenceDiagram
     participant DB as PostgreSQL
     B->>N: GET /api/businesses/sunny-scoops
     N->>C: same origin, no CORS
+    Note over C: TenantScopeInterceptor opens the request's tenant scope
     C->>S: getBusiness(slug)
     S->>R: findBySlug, hours, upcoming menus
     R->>DB: SQL
@@ -59,7 +60,9 @@ flowchart LR
 | Declarative authorization (proxy) | `@PreAuthorize` on `CatalogService` and `MenuManagementService` | Permissions are part of the service's contract, checked before any caller reaches the method ([security](security.md#per-business-permissions-method-security)) |
 | Database as the arbiter | `uq_menu_item` decides a duplicate menu item; `DataIntegrityViolationException` becomes `ITEM_ALREADY_IN_MENU` | A check-then-insert in Java could be passed by two concurrent requests |
 | Dependency injection | Constructors everywhere, including `Clock` | Swappable collaborators; a frozen clock in tests |
-| Multi-tenancy by discriminator | `tenant_id` + composite foreign keys | One schema for every business; the database rejects cross-tenant rows |
+| Multi-tenancy by discriminator | `tenant_id` + composite foreign keys, `@TenantId` | One schema for every business; Hibernate filters every query by the request's business and the database rejects cross-tenant rows ([tenant isolation](tenant-isolation.md)) |
+| Context object (thread-bound) | `TenantContext`, opened per request by `TenantScopeInterceptor` | The tenant reaches Hibernate without passing it through every method; scopes restore the previous value, so they nest and never leak to the next request |
+| Interceptor | `TenantScopeInterceptor`, mapped by URL in `TenantConfig` | A cross-cutting concern (which business a request works in) decided in one place, before any controller |
 | Optimistic locking | `@Version` on menu items | Concurrent reservations of the last unit cannot both succeed (slice 4) |
 | Pessimistic locking of the aggregate root | `SELECT … FOR UPDATE` on the menu before any change to it or its items | Checks and writes on one menu run one after another, so a concurrent `publish` and `removeItem` cannot leave an empty menu public ([why](domain-model.md#concurrent-changes-to-one-menu)) |
 | Batch loading | `findByTenantIdIn`, `findByMenuIdInWithItem` | A fixed number of queries per page instead of N+1 |
@@ -133,3 +136,5 @@ components/, api/, theme/ or i18n/.
 Both sides freeze time in tests: the backend injects a fixed `Clock`, the frontend fakes only `Date` (`vi.useFakeTimers({ toFake: ["Date"] })`) so promises and timers keep working.
 
 Full-application tests (`@SpringBootTest`) do not import `FixedClockConfig`: the application already has a `Clock` bean, so a second one fails the context. They inject the real `Clock` and compute dates from it, like `ManagedMenuControllerIntegrationTest` does for "tomorrow".
+
+Every Spring test runs in the cross-tenant scope (`CrossTenantTestExecutionListener`), so fixtures can build several businesses in one transaction; `TenantIsolationIntegrationTest` opens narrower scopes to test the filter ([tenant isolation](tenant-isolation.md#tests)).

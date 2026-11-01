@@ -5,6 +5,7 @@ import java.math.BigDecimal;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.TenantId;
 
 /** A catalog item offered in a menu, with that day's price and stock. */
 @Entity
@@ -19,8 +20,8 @@ public class MenuItem {
   private Long id;
 
   // Repeated from the parents on purpose: the composite foreign keys use it to keep a menu item
-  // from mixing two businesses
-  private Long tenantId;
+  // from mixing two businesses. @TenantId also filters queries by it (see TenantContext)
+  @TenantId private Long tenantId;
 
   @ManyToOne(fetch = FetchType.LAZY, optional = false)
   @JoinColumn(name = "menu_id")

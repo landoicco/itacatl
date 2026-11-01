@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import dev.licaza.itacatl.BrowserSession;
 import dev.licaza.itacatl.FixedClockConfig;
+import dev.licaza.itacatl.ServerThreadMockMvcConfig;
 import dev.licaza.itacatl.TestcontainersConfiguration;
 import dev.licaza.itacatl.domain.AppUser;
 import dev.licaza.itacatl.domain.Business;
@@ -35,7 +36,7 @@ import tools.jackson.databind.json.JsonMapper;
 // violations reach the client
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import(TestcontainersConfiguration.class)
+@Import({TestcontainersConfiguration.class, ServerThreadMockMvcConfig.class})
 @ActiveProfiles("test")
 class ManagedMenuControllerIntegrationTest {
 

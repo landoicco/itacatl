@@ -147,7 +147,7 @@ Code, API, logs and docs are in English; deployments serve their users in their 
 
 ## Rework roadmap
 
-The rework from the product catalog to this marketplace is built in vertical slices. Each slice is one PR (slices 1 and 2 are split because of their size) and leaves something that can be shown; the README is updated with the new state after each one.
+The rework from the product catalog to this marketplace is built in vertical slices. Each slice is one PR (slices 1, 2 and 3 are split because of their size) and leaves something that can be shown; the README is updated with the new state after each one.
 
 | # | Slice | Scope | Visible result |
 |---|---|---|---|
@@ -156,7 +156,8 @@ The rework from the product catalog to this marketplace is built in vertical sli
 | 2a | Owner and staff accounts | Accounts with per-business memberships, Spring Security sign-in with sessions in PostgreSQL (Spring Session JDBC) and CSRF ([security guide](security.md)) | Sign-in API covered by integration tests |
 | 2b | Owner API | Item catalog (create, edit, archive), menus built by duplicating or picking from the catalog, publishing; every endpoint checks the user's membership | API covered by integration tests |
 | 2c | Owner panel | Sign-in screen, catalog and menu editor, mobile-first | Business panel |
-| 3 | Tenant isolation | Hibernate `@TenantId` and PostgreSQL Row-Level Security, with controlled cross-tenant public reads | Tests proving one business cannot see another's data |
+| 3a | Tenant filter | Hibernate `@TenantId` with a tenant scope per request, controlled cross-tenant public reads, Open Session in View off ([tenant isolation](tenant-isolation.md)) | Tests proving one business cannot see another's data |
+| 3b | Row-Level Security | PostgreSQL policies on every tenant-owned table, the tenant passed to each connection, a runtime database role without DDL or `BYPASSRLS`; public reads are read-only and never see drafts | Tests proving the database refuses what the application does not filter |
 | 4 | Cash reservations | Orders with copied name and price, stock holds, expiry (`@Scheduled`), concurrency, error codes with `ProblemDetail` | The reservation flow |
 | 5 | Customer identity | WhatsApp OTP (logged locally), rate limits, customer session | Reserving with a verified phone |
 | 6 | Bank transfers and notifications | Payment states, CLABE and order reference, customer notifications | The full flow in this spec |

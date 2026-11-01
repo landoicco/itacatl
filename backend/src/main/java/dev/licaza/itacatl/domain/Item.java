@@ -5,6 +5,7 @@ import java.math.BigDecimal;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.TenantId;
 
 /** Something a business knows how to make, kept in its catalog and offered in menus. */
 @Entity
@@ -18,7 +19,8 @@ public class Item {
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
 
-  private Long tenantId;
+  // Hibernate adds "tenant_id = ?" to every query and fills it on insert (see TenantContext)
+  @TenantId private Long tenantId;
 
   private String name;
 

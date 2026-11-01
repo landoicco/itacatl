@@ -4,5 +4,6 @@
 # Local environment; .env.example is the committed template
 .env
 
-# GitHub PR Descriptions
+# GitHub PR and release descriptions, written locally and passed to gh
 pr-body.md
+release-desc-body.md
