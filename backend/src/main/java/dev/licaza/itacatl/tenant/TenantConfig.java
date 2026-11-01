@@ -21,17 +21,15 @@ import org.springframework.web.util.pattern.PathPatternParser;
 @Configuration
 public class TenantConfig implements WebMvcConfigurer {
 
-  // Management: only the business in the URL. Whether the user may manage it is decided later, by
-  // @PreAuthorize on the service. The slug is read from this pattern, not from the controller's
-  // mapping, so a controller that names its variable differently cannot change the tenant
+  // The slug comes from this pattern, not the controller's mapping; permissions stay with
+  // @PreAuthorize
   static final PathPattern MANAGEMENT = parse("/api/manage/businesses/{slug}/**");
 
-  // The marketplace: every business's published menus, read across tenants on purpose
+  // The marketplace reads across tenants on purpose
   static final List<PathPattern> MARKETPLACE =
       List.of(parse("/api/businesses/**"), parse("/api/menus/**"));
 
-  // Looked up on first use, so web slice tests (@WebMvcTest), which have no repositories, can
-  // still load this configuration
+  // Lazy, so @WebMvcTest slices, which have no repositories, still load this class
   private final ObjectProvider<BusinessRepository> businessRepository;
 
   public TenantConfig(ObjectProvider<BusinessRepository> businessRepository) {
@@ -55,8 +53,7 @@ public class TenantConfig implements WebMvcConfigurer {
     if (management != null) {
       return businessId(management.getUriVariables().get("slug"));
     }
-    // Reads only: a future write under these paths (a customer's reservation) must not run with
-    // the filter off, able to insert rows for any business
+    // Reads only: a write here must not run with the filter off
     if (isRead(request) && MARKETPLACE.stream().anyMatch(pattern -> pattern.matches(path))) {
       return TenantContext.CROSS_TENANT;
     }

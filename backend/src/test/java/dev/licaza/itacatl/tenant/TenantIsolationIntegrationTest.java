@@ -7,9 +7,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import dev.licaza.itacatl.AppRoleTestcontainersConfiguration;
 import dev.licaza.itacatl.BrowserSession;
 import dev.licaza.itacatl.ServerThreadMockMvcConfig;
-import dev.licaza.itacatl.TestcontainersConfiguration;
 import dev.licaza.itacatl.domain.*;
 import dev.licaza.itacatl.repo.*;
 import java.math.BigDecimal;
@@ -33,7 +33,7 @@ import org.springframework.test.web.servlet.MockMvc;
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import({TestcontainersConfiguration.class, ServerThreadMockMvcConfig.class})
+@Import({AppRoleTestcontainersConfiguration.class, ServerThreadMockMvcConfig.class})
 @ActiveProfiles("test")
 class TenantIsolationIntegrationTest {
 
@@ -53,8 +53,8 @@ class TenantIsolationIntegrationTest {
   private Item cornersItem;
   private Menu cornersMenu;
 
-  // The context, and its database, is shared with other full-application tests. Built in the
-  // cross-tenant scope that every test starts in (CrossTenantTestExecutionListener)
+  // The context, and its database, is shared with other full-application tests. Each business's
+  // rows are written in its own scope, as Row-Level Security requires
   @BeforeEach
   void createTwoBusinesses() {
     membershipRepository.deleteAll();
@@ -63,10 +63,15 @@ class TenantIsolationIntegrationTest {
 
     sunny = businessRepository.save(business("sunny-scoops", "Sunny Scoops"));
     Business corner = businessRepository.save(business("cold-corner", "Cold Corner"));
-    sunnysItem = itemRepository.save(item(sunny, "Mango sorbet", "45.00"));
-    cornersItem = itemRepository.save(item(corner, "Lime sorbet", "40.00"));
-    cornersMenu = menuRepository.save(menu(corner, TODAY, "12:00", "20:00", MenuStatus.PUBLISHED));
-    menuItemRepository.save(menuItem(cornersMenu, cornersItem, "40.00", 10));
+    sunnysItem = inScopeOf(sunny, () -> itemRepository.save(item(sunny, "Mango sorbet", "45.00")));
+    cornersItem =
+        inScopeOf(corner, () -> itemRepository.save(item(corner, "Lime sorbet", "40.00")));
+    cornersMenu =
+        inScopeOf(
+            corner,
+            () -> menuRepository.save(menu(corner, TODAY, "12:00", "20:00", MenuStatus.PUBLISHED)));
+    inScopeOf(
+        corner, () -> menuItemRepository.save(menuItem(cornersMenu, cornersItem, "40.00", 10)));
 
     AppUser ana = new AppUser();
     ana.setEmail("ana@example.com");

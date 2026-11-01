@@ -15,7 +15,7 @@ The goal is learning: every technical choice should be one the maintainer can de
 
 - `backend/`: Spring Boot 4 (Java 21), Maven, Flyway, JPA. Package root `dev.licaza.itacatl`.
 - `frontend/`: React 19, TypeScript, Vite, Tailwind, Vitest.
-- `docker-compose.yml` + `.env` (git-ignored, copied from `.env.example`): local full stack (database, backend, frontend).
+- `docker-compose.yml` + `.env` (git-ignored, copied from `.env.example`): local full stack (database, backend, frontend). `docker/` holds the containers' init scripts.
 - `docs/`: specs, plans, and ADRs in `docs/adr/`.
 
 ## Environment
@@ -52,7 +52,7 @@ A PostToolUse hook (`.claude/hooks/format.sh`) formats every file Claude edits w
 - **Spring first:** prefer Spring's own tools (Security, Session, Data, Validation, Scheduling) over managed services, unless the service provides something Spring can't.
 - **Flyway:** until the first production deploy, migrations may be squashed into a clean baseline (ADR 0003); from then on, never edit an applied migration and add a new `V{n}__description.sql`.
 - **Language of content:** sample data and seed files are in English by default; Spanish content is a per-deployment setting (e.g. the `es-MX` seed file), and Spanish domain terms get an English gloss: ice cream shops (*neverías*). See `docs/domain-model.md`.
-- **Tenants:** every tenant-owned entity has `@TenantId`, and code outside a request opens a `TenantContext` scope before calling a transactional service. Services still look IDs up with their business (`findByIdAndTenantId`). See `docs/tenant-isolation.md`.
+- **Tenants:** every tenant-owned entity has `@TenantId`, and its table gets Row-Level Security policies like `V4`. Every new table's migration grants `itacatl_app` what it needs, since the app connects as that role. Code outside a request opens a `TenantContext` scope before calling a transactional service. Services still look IDs up with their business (`findByIdAndTenantId`). See `docs/tenant-isolation.md`.
 - **Time:** never call `now()` directly; inject the `Clock` bean. Schedules are local times plus the business's zone ID.
 - **Backend layering:** controller → service interface → implementation → repository, with DTOs at the API boundary. Keep that structure.
 - **Frontend layering:** `app/` → `features/<name>/` → shared layers (`components/`, `api/`, `theme/`, `i18n/`). A feature never imports another feature; ESLint enforces it. Components use theme tokens (`bg-surface`, `rounded-card`, `text-display`), never raw colors or fonts. See `docs/architecture.md` and `docs/theming.md`.

@@ -116,7 +116,7 @@ public interface MenuManagementService {
 - **What it checks.** `canManage` is owners only; `canView` is owners and staff. Both ask the database whether the user has one of those roles in the business with that slug, in one `exists` query. Anonymous requests never get this far (the URL rules answer 401), and `BusinessAccess` still returns `false` for them.
 - **On the interface, not the controller.** The permission is part of the service's contract: any future caller (a scheduled job, a second controller) gets the same check, and the rule is next to the method's documentation.
 - **Then the data is scoped too.** Permission on the slug is not enough on its own: a menu ID could belong to another business. The services look every ID up together with the business (`findByIdAndTenantId`), so a foreign ID answers 404, not someone else's data. The two answers differ on purpose: slugs are public (every business is on the marketplace), so a 403 for one reveals nothing, while a 403 for an internal ID would confirm that it exists somewhere.
-- **And Hibernate filters underneath.** Each management request runs in its business's tenant scope, so even a query that forgot the business would only see that business's rows ([tenant isolation](tenant-isolation.md)). Slice 3b adds Row-Level Security in the database below that.
+- **And Hibernate filters underneath.** Each management request runs in its business's tenant scope, so even a query that forgot the business would only see that business's rows ([tenant isolation](tenant-isolation.md)). Below that, PostgreSQL's Row-Level Security applies the same rule to every statement, native SQL included, since the application connects as a role that cannot bypass it.
 
 | Layer | Question | Answer when it fails |
 |---|---|---|
@@ -124,6 +124,7 @@ public interface MenuManagementService {
 | Method security (`@PreAuthorize`) | Is this user an owner, or a member, of this business? | 403 `ACCESS_DENIED` |
 | Tenant-scoped queries | Does this ID belong to this business? | 404 `…_NOT_FOUND` |
 | Hibernate tenant filter (`@TenantId`) | Does this row belong to the request's business, whatever the query says? | Not found, like the row above |
+| Row-Level Security (PostgreSQL) | Does this row belong to the connection's business, whatever sent the statement? | Not found when reading; an error when writing into another business |
 
 ## A request, step by step
 

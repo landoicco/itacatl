@@ -1,14 +1,15 @@
 package dev.licaza.itacatl.controller;
 
 import static dev.licaza.itacatl.MarketplaceTestData.business;
+import static dev.licaza.itacatl.MarketplaceTestData.inScopeOf;
 import static dev.licaza.itacatl.MarketplaceTestData.item;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import dev.licaza.itacatl.AppRoleTestcontainersConfiguration;
 import dev.licaza.itacatl.BrowserSession;
 import dev.licaza.itacatl.FixedClockConfig;
 import dev.licaza.itacatl.ServerThreadMockMvcConfig;
-import dev.licaza.itacatl.TestcontainersConfiguration;
 import dev.licaza.itacatl.domain.AppUser;
 import dev.licaza.itacatl.domain.Business;
 import dev.licaza.itacatl.domain.Item;
@@ -36,7 +37,7 @@ import tools.jackson.databind.json.JsonMapper;
 // violations reach the client
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import({TestcontainersConfiguration.class, ServerThreadMockMvcConfig.class})
+@Import({AppRoleTestcontainersConfiguration.class, ServerThreadMockMvcConfig.class})
 @ActiveProfiles("test")
 class ManagedMenuControllerIntegrationTest {
 
@@ -71,10 +72,11 @@ class ManagedMenuControllerIntegrationTest {
     member("luis@example.com", sunny, MembershipRole.STAFF);
     member("rosa@example.com", corner, MembershipRole.OWNER);
 
-    lime = itemRepository.save(item(sunny, "Lime sorbet", "40.00"));
+    // In the business's scope: Row-Level Security lets the tests' cross-tenant scope only read
+    lime = inScopeOf(sunny, () -> itemRepository.save(item(sunny, "Lime sorbet", "40.00")));
     Item old = item(sunny, "Old flavor", "30.00");
     old.setArchived(true);
-    archived = itemRepository.save(old);
+    archived = inScopeOf(sunny, () -> itemRepository.save(old));
     tomorrow = LocalDate.now(clock.withZone(FixedClockConfig.MEXICO_CITY)).plusDays(1);
   }
 

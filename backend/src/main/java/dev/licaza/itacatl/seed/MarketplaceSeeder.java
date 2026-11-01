@@ -3,12 +3,15 @@ package dev.licaza.itacatl.seed;
 import dev.licaza.itacatl.domain.*;
 import dev.licaza.itacatl.repo.*;
 import dev.licaza.itacatl.seed.SeedFile.*;
+import dev.licaza.itacatl.tenant.TenantContext;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -17,7 +20,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.core.io.Resource;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -41,6 +45,7 @@ public class MarketplaceSeeder {
   private final AppUserRepository userRepository;
   private final MembershipRepository membershipRepository;
   private final PasswordEncoder passwordEncoder;
+  private final TransactionTemplate transactions;
   private final Clock clock;
 
   public MarketplaceSeeder(
@@ -52,6 +57,7 @@ public class MarketplaceSeeder {
       AppUserRepository userRepository,
       MembershipRepository membershipRepository,
       PasswordEncoder passwordEncoder,
+      PlatformTransactionManager transactionManager,
       Clock clock) {
     this.businessRepository = businessRepository;
     this.hoursRepository = hoursRepository;
@@ -61,16 +67,22 @@ public class MarketplaceSeeder {
     this.userRepository = userRepository;
     this.membershipRepository = membershipRepository;
     this.passwordEncoder = passwordEncoder;
+    // Not @Transactional: each transaction starts inside its business's scope
+    this.transactions = new TransactionTemplate(transactionManager);
     this.clock = clock;
   }
 
   /**
    * Loads the file into an empty marketplace; does nothing if businesses already exist.
    *
+   * <p>Each business is written in its own tenant scope and transaction, like a request would:
+   * Row-Level Security lets no scope write several businesses' rows. So one transaction cannot undo
+   * a failure; the seeder deletes what it created instead, and the next start seeds from scratch.
+   * See docs/tenant-isolation.md.
+   *
    * @param userPassword the password of every seeded account, from configuration rather than the
    *     file, so the repository holds no credentials
    */
-  @Transactional
   public void seed(Resource file, String userPassword) {
     if (businessRepository.count() > 0) {
       log.info("⏭️ Marketplace already has businesses, skipping the seed");
@@ -82,10 +94,22 @@ public class MarketplaceSeeder {
     }
 
     SeedFile seed = read(file);
-    Map<String, AppUser> users = seedUsers(seed.users(), userPassword);
+    // Accounts, businesses and memberships belong to no tenant
+    Map<String, AppUser> users =
+        transactions.execute(status -> seedUsers(seed.users(), userPassword));
+    List<Long> businessIds = new ArrayList<>();
     int menus = 0;
-    for (SeedBusiness business : seed.businesses()) {
-      menus += seedBusiness(business, users);
+    try {
+      for (SeedBusiness seedBusiness : seed.businesses()) {
+        Business business = transactions.execute(status -> seedBusiness(seedBusiness, users));
+        businessIds.add(business.getId());
+        try (TenantContext.Scope scope = TenantContext.open(business.getId())) {
+          menus += transactions.execute(status -> seedCatalogAndMenus(seedBusiness, business));
+        }
+      }
+    } catch (RuntimeException ex) {
+      undo(businessIds, users.values(), ex);
+      throw ex;
     }
     log.info(
         "📦 Seeded {} businesses with {} menus and {} accounts from {}",
@@ -93,6 +117,24 @@ public class MarketplaceSeeder {
         menus,
         users.size(),
         file.getFilename());
+  }
+
+  // A compensating cleanup: the businesses take their rows with them (ON DELETE CASCADE), and the
+  // accounts their memberships
+  private void undo(List<Long> businessIds, Collection<AppUser> users, RuntimeException failure) {
+    log.warn(
+        "❌ Seed failed, removing the {} businesses and {} accounts it created",
+        businessIds.size(),
+        users.size());
+    try {
+      transactions.executeWithoutResult(
+          status -> {
+            businessRepository.deleteAllById(businessIds);
+            userRepository.deleteAllById(users.stream().map(AppUser::getId).toList());
+          });
+    } catch (RuntimeException cleanup) {
+      failure.addSuppressed(cleanup);
+    }
   }
 
   // Keyed by email, so businesses can reference their members
@@ -118,8 +160,7 @@ public class MarketplaceSeeder {
     }
   }
 
-  // Returns the number of menus created
-  private int seedBusiness(SeedBusiness seed, Map<String, AppUser> users) {
+  private Business seedBusiness(SeedBusiness seed, Map<String, AppUser> users) {
     Business business = new Business();
     business.setSlug(seed.slug());
     business.setName(seed.name());
@@ -128,7 +169,6 @@ public class MarketplaceSeeder {
     business.setAcceptsPickup(seed.acceptsPickup());
     business.setAcceptsDineIn(seed.acceptsDineIn());
     business = businessRepository.save(business);
-    Long tenantId = business.getId();
 
     for (SeedMember member : seed.members()) {
       AppUser user = users.get(AppUser.normalizeEmail(member.email()));
@@ -139,6 +179,13 @@ public class MarketplaceSeeder {
       }
       membershipRepository.save(new Membership(user.getId(), business, member.role()));
     }
+    return business;
+  }
+
+  // Returns the number of menus created. Each row sets its tenant, because the seeder's test runs
+  // cross-tenant, where Hibernate does not fill it
+  private int seedCatalogAndMenus(SeedBusiness seed, Business business) {
+    Long tenantId = business.getId();
 
     List<BusinessHours> hours =
         hoursRepository.saveAll(

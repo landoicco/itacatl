@@ -37,7 +37,7 @@ A work in progress, built in the open.
 | Owner API: catalog, menu lifecycle, per-business permissions | ✅ Done |
 | Owner panel: catalog and menu editor, mobile-first | ✅ Done |
 | Tenant isolation: Hibernate tenant filter | ✅ Done |
-| Tenant isolation: PostgreSQL Row-Level Security | 🚧 Next |
+| Tenant isolation: PostgreSQL Row-Level Security | ✅ Done |
 | Reservations and payments ([roadmap](docs/product-spec.md#rework-roadmap)) | 📋 Planned |
 | Terraform: bootstrap, modules, CI/CD | 📋 Planned |
 | Ephemeral AWS deploy with load test and recovery evidence | 📋 Planned |
@@ -50,6 +50,8 @@ Requires Docker with Compose v2.
 cp .env.example .env
 docker compose up --build
 ```
+
+The database creates the backend's own role, `itacatl_app`, with the password in `DB_APP_PASSWORD`; Flyway migrates with the owner's `DB_USER` and `DB_PASSWORD` ([why two roles](docs/tenant-isolation.md#two-database-roles)).
 
 Open `http://localhost:3000`. The backend seeds three sample ice cream shops with today's and tomorrow's menus, so there is always something open or about to open. The API runs at `http://localhost:8080`:
 
@@ -118,7 +120,7 @@ Layers, patterns and the rules that keep them: [architecture guide](docs/archite
 ## Engineering highlights
 
 **Backend**
-- **Tenant isolation in layers:** Hibernate's `@TenantId` adds the request's business to every query and insert, failing closed when no business is set, and composite foreign keys `(id, tenant_id)` make PostgreSQL reject any row that mixes two businesses ([tenant isolation](docs/tenant-isolation.md)).
+- **Tenant isolation in layers:** Hibernate's `@TenantId` adds the request's business to every query and insert, failing closed when no business is set. Below it, PostgreSQL Row-Level Security applies the same rule to every statement, native SQL included: the app connects as a role that owns nothing and cannot bypass the policies, and the public marketplace can only read published menus. Composite foreign keys `(id, tenant_id)` reject any row that mixes two businesses ([tenant isolation](docs/tenant-isolation.md)).
 - **Deterministic time:** schedules are local times plus a zone ID, and "now" comes from an injected `Clock`, so opening hours are tested at a frozen moment.
 - **No N+1:** the shop list loads every shop's hours and next menu in a fixed number of queries.
 - **Real database in tests:** integration tests run against PostgreSQL in Testcontainers, which also validates every Flyway migration.
@@ -214,7 +216,7 @@ gh release create v0.1.0 --title "v0.1.0" --notes-file release-desc-body.md
 | [Domain model](docs/domain-model.md) | Tables, tenant integrity, time handling, read and management API, errors, sample data |
 | [Architecture](docs/architecture.md) | Backend and frontend layers, patterns, enforced dependency rules, tests |
 | [Security](docs/security.md) | Spring Security, sign-in, per-business permissions, sessions in PostgreSQL, CSRF |
-| [Tenant isolation](docs/tenant-isolation.md) | How businesses' data is kept apart: Hibernate `@TenantId`, tenant scopes, which tenant each caller runs as, traps |
+| [Tenant isolation](docs/tenant-isolation.md) | How businesses' data is kept apart: Hibernate `@TenantId`, tenant scopes, PostgreSQL Row-Level Security and its two roles, which tenant each caller runs as, traps |
 | [Owner panel](docs/owner-panel.md) | The panel's screens, API layer, session handling, cache updates, forms and their decisions |
 | [Theming](docs/theming.md) | Design tokens, themes and how to add a vertical |
 | [i18n guide](docs/i18n.md) | How translations are wired in, dates and times, safety nets |
@@ -227,6 +229,7 @@ gh release create v0.1.0 --title "v0.1.0" --notes-file release-desc-body.md
 backend/    Spring Boot API
 frontend/   React app
 docs/       guides, product spec, infra plan, ADRs (docs/adr/)
+docker/     init scripts for the local containers
 ```
 
 ## License

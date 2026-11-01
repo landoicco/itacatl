@@ -60,7 +60,8 @@ flowchart LR
 | Declarative authorization (proxy) | `@PreAuthorize` on `CatalogService` and `MenuManagementService` | Permissions are part of the service's contract, checked before any caller reaches the method ([security](security.md#per-business-permissions-method-security)) |
 | Database as the arbiter | `uq_menu_item` decides a duplicate menu item; `DataIntegrityViolationException` becomes `ITEM_ALREADY_IN_MENU` | A check-then-insert in Java could be passed by two concurrent requests |
 | Dependency injection | Constructors everywhere, including `Clock` | Swappable collaborators; a frozen clock in tests |
-| Multi-tenancy by discriminator | `tenant_id` + composite foreign keys, `@TenantId` | One schema for every business; Hibernate filters every query by the request's business and the database rejects cross-tenant rows ([tenant isolation](tenant-isolation.md)) |
+| Multi-tenancy by discriminator | `tenant_id` + composite foreign keys, `@TenantId`, Row-Level Security | One schema for every business; Hibernate filters every query by the request's business, PostgreSQL's policies do the same for every statement, and the foreign keys reject cross-tenant rows ([tenant isolation](tenant-isolation.md)) |
+| Least privilege | The application connects as `itacatl_app` (data only, no DDL); Flyway migrates as the owner | A bug or a leaked connection cannot change the schema or turn the policies off |
 | Context object (thread-bound) | `TenantContext`, opened per request by `TenantScopeInterceptor` | The tenant reaches Hibernate without passing it through every method; scopes restore the previous value, so they nest and never leak to the next request |
 | Interceptor | `TenantScopeInterceptor`, mapped by URL in `TenantConfig` | A cross-cutting concern (which business a request works in) decided in one place, before any controller |
 | Optimistic locking | `@Version` on menu items | Concurrent reservations of the last unit cannot both succeed (slice 4) |
@@ -137,4 +138,4 @@ Both sides freeze time in tests: the backend injects a fixed `Clock`, the fronte
 
 Full-application tests (`@SpringBootTest`) do not import `FixedClockConfig`: the application already has a `Clock` bean, so a second one fails the context. They inject the real `Clock` and compute dates from it, like `ManagedMenuControllerIntegrationTest` does for "tomorrow".
 
-Every Spring test runs in the cross-tenant scope (`CrossTenantTestExecutionListener`), so fixtures can build several businesses in one transaction; `TenantIsolationIntegrationTest` opens narrower scopes to test the filter ([tenant isolation](tenant-isolation.md#tests)).
+Every Spring test starts in the cross-tenant scope (`CrossTenantTestExecutionListener`). Slice tests connect as the tables' owner, so their fixtures can build several businesses in one transaction; full-application tests connect as `itacatl_app`, like production, and write each business's rows in its scope ([tenant isolation](tenant-isolation.md#tests)).

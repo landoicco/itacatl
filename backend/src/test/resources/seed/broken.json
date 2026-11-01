@@ -1,0 +1,41 @@
+{
+  "users": [{ "email": "ana@example.com", "name": "Ana" }],
+  "businesses": [
+    {
+      "slug": "sunny-scoops",
+      "name": "Sunny Scoops",
+      "description": "Seeds correctly.",
+      "timeZone": "America/Mexico_City",
+      "acceptsPickup": true,
+      "acceptsDineIn": false,
+      "members": [{ "email": "ana@example.com", "role": "OWNER" }],
+      "hours": [
+        {
+          "days": ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"],
+          "opens": "00:00",
+          "closes": "23:59"
+        }
+      ],
+      "items": [{ "key": "lime", "name": "Lime sorbet", "description": "Tart.", "price": 40 }],
+      "menus": [{ "dayOffset": 1, "items": [{ "item": "lime", "quantity": 10 }] }]
+    },
+    {
+      "slug": "cold-corner",
+      "name": "Cold Corner",
+      "description": "Its menu uses an item its catalog does not have.",
+      "timeZone": "America/Mexico_City",
+      "acceptsPickup": true,
+      "acceptsDineIn": false,
+      "members": [{ "email": "ana@example.com", "role": "OWNER" }],
+      "hours": [
+        {
+          "days": ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"],
+          "opens": "00:00",
+          "closes": "23:59"
+        }
+      ],
+      "items": [{ "key": "mango", "name": "Mango sorbet", "description": "Sweet.", "price": 45 }],
+      "menus": [{ "dayOffset": 1, "items": [{ "item": "unknown", "quantity": 10 }] }]
+    }
+  ]
+}
