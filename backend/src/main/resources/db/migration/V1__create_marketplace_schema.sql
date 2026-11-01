@@ -14,6 +14,8 @@ CREATE TABLE business (
     accepts_pickup BOOLEAN NOT NULL DEFAULT TRUE,
     accepts_dine_in BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- 0 and -1 are reserved by the application's tenant scopes (TenantContext)
+    CONSTRAINT ck_business_id CHECK (id > 0),
     CONSTRAINT ck_business_slug CHECK (slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'),
     CONSTRAINT ck_business_fulfillment CHECK (accepts_pickup OR accepts_dine_in)
 );

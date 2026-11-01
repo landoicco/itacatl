@@ -6,6 +6,7 @@ import java.time.LocalTime;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.TenantId;
 
 /** One opening window of the weekly schedule. A day can have several (split shifts). */
 @Entity
@@ -19,7 +20,8 @@ public class BusinessHours {
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
 
-  private Long tenantId;
+  // Hibernate adds "tenant_id = ?" to every query and fills it on insert (see TenantContext)
+  @TenantId private Long tenantId;
 
   @Convert(converter = DayOfWeekConverter.class)
   private DayOfWeek dayOfWeek;
