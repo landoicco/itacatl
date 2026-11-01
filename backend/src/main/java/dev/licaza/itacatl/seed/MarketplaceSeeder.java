@@ -65,8 +65,7 @@ public class MarketplaceSeeder {
     this.userRepository = userRepository;
     this.membershipRepository = membershipRepository;
     this.passwordEncoder = passwordEncoder;
-    // Transactions started here rather than with @Transactional, since each one runs in a tenant
-    // scope that must be open before it starts
+    // Not @Transactional: each transaction starts inside its business's scope
     this.transactions = new TransactionTemplate(transactionManager);
     this.clock = clock;
   }
@@ -156,8 +155,8 @@ public class MarketplaceSeeder {
     return business;
   }
 
-  // Returns the number of menus created. Rows still name their tenant: the seeder's test runs it
-  // all in one transaction, in the cross-tenant scope, which keeps the tenant each row is given
+  // Returns the number of menus created. Each row sets its tenant, because the seeder's test runs
+  // cross-tenant, where Hibernate does not fill it
   private int seedCatalogAndMenus(SeedBusiness seed, Business business) {
     Long tenantId = business.getId();
 

@@ -7,9 +7,8 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * PostgreSQL for test slices ({@code @DataJpaTest}). They connect as the tables' owner, which
- * Row-Level Security does not apply to, so fixtures can build several businesses in one
- * transaction. Full-application tests use {@link AppRoleTestcontainersConfiguration} instead.
+ * PostgreSQL for test slices, connected as the owner, whom Row-Level Security does not apply to.
+ * Full-application tests use {@link AppRoleTestcontainersConfiguration}.
  */
 @TestConfiguration(proxyBeanMethods = false)
 public class TestcontainersConfiguration {
@@ -20,8 +19,7 @@ public class TestcontainersConfiguration {
     return postgres();
   }
 
-  // Same image as docker-compose, so tests run against the real database engine, with the
-  // application's role created before the migrations grant it privileges
+  // Same image as docker-compose, with the application's role created before the migrations
   static PostgreSQLContainer postgres() {
     return new PostgreSQLContainer(DockerImageName.parse("postgres:18-alpine"))
         .withInitScript("testcontainers/create-app-role.sql");

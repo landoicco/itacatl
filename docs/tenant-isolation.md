@@ -1,6 +1,26 @@
 # Tenant isolation
 
-How the marketplace keeps each business's data apart while every business shares one database and one schema. The guide starts with the problem and Hibernate's multi-tenancy concepts, then shows how each piece is wired in here, which tenant every part of the application runs as, how to extend it, and the traps to avoid. The decision itself, a shared schema with a discriminator column, is [ADR 0005](adr/0005-shared-schema-tenant-isolation.md). The tables are in the [domain model](domain-model.md), and permissions in the [security guide](security.md).
+How the marketplace keeps each business's data apart while every business shares one database and one schema. The guide starts with a summary and the problem, then covers the two mechanisms that enforce isolation, each with its concepts first and its wiring after: Hibernate's tenant filter in the application, and PostgreSQL's Row-Level Security in the database. It ends with which tenant every part of the application runs as, how to extend it, and the traps to avoid. The decision itself is [ADR 0005](adr/0005-shared-schema-tenant-isolation.md). The tables are in the [domain model](domain-model.md), and permissions in the [security guide](security.md).
+
+## In one page
+
+- **The model.** Every business is a tenant, and all tenants share the same tables, told apart by a `tenant_id` column. This is the **pool model** of multi-tenancy, as AWS calls it (against *silo*, a database per tenant, and *bridge*, a schema per tenant); Microsoft calls it a shared database with a shared schema.
+- **The tenant of the moment.** Each thread has a current tenant in `TenantContext`, opened as a scope that is closed afterwards. It is one of three values:
+  - **A business ID:** working inside that business.
+  - **`CROSS_TENANT`:** the public marketplace, reading every business. The database calls the same scope *public read*.
+  - **`NONE`:** no scope was opened, so no tenant data is visible (fail closed).
+- **Who opens the scope.** For a request, an interceptor, from the URL, before the transaction starts. Outside a request (the seed, scheduled jobs), the code itself, also before the transaction.
+- **Who enforces it.** Two layers, each enough on its own:
+  - **Hibernate** reads the tenant when a session opens, and adds `tenant_id = ?` to every query and insert.
+  - **PostgreSQL** gets the same tenant on the session's connection, and its Row-Level Security policies apply it to every statement. The application connects as a role that cannot bypass them.
+
+```mermaid
+flowchart LR
+    url["URL"] --> scope["TenantContext scope<br/>business, CROSS_TENANT or NONE"]
+    scope --> hib["Hibernate session<br/>tenant filter"]
+    hib --> conn["Connection<br/>app.tenant_id"]
+    conn --> rls["PostgreSQL policies"]
+```
 
 ## The problem
 
@@ -21,13 +41,13 @@ So isolation is built in **layers**, each one catching what the one above misses
 | Scoped lookups | `findByIdAndTenantId` in the services | An ID of another business in a URL of your own: answered 404 | Slice 2b |
 | **Hibernate tenant filter** | `@TenantId` and `TenantContext` (this guide) | A query that forgets the tenant: Hibernate adds it to every query and every insert | Slice 3a |
 | Composite foreign keys | `(id, tenant_id)` references in `V1` ([domain model](domain-model.md#tenant-integrity-enforced-by-the-database)) | A row that mixes two businesses, e.g. one business's item in another's menu | Slice 1a |
-| PostgreSQL Row-Level Security | Policies on every tenant-owned table | Anything that bypasses Hibernate: native SQL, a bug in this mechanism | Slice 3b (next) |
+| **PostgreSQL Row-Level Security** | Policies in `V4` and `TenantConnectionProvider` (this guide) | Anything that goes around Hibernate, such as native SQL, or a bug in the filter itself | Slice 3b |
 
-The first two are code that has to be written correctly every time. The Hibernate filter is written **once** and applies to every query, including those written in the future by someone who has never read this page.
+The first two are code that has to be written correctly every time. The Hibernate filter is written **once** and applies to every query, including those written in the future by someone who has never read this page. Row-Level Security does the same one level down, in the database, where no application code can skip it.
 
 ## Hibernate's multi-tenancy, in four concepts
 
-Hibernate supports three ways to separate tenants: a database per tenant, a schema per tenant, or a shared schema with a **discriminator** column. The project uses the third ([why](adr/0005-shared-schema-tenant-isolation.md)), which Hibernate 6 and later support with one annotation.
+Hibernate supports three ways to separate tenants: a database per tenant, a schema per tenant, or a shared schema with a **discriminator** column. The project uses the third, the pool model ([why](adr/0005-shared-schema-tenant-isolation.md)), which Hibernate 6 and later support with one annotation.
 
 - **`@TenantId`** marks the discriminator field of an entity. Hibernate then:
   - adds `tenant_id = ?` to every query on that entity: repository methods, JPQL, `findById`, and joins that fetch it;
@@ -204,7 +224,7 @@ CREATE POLICY item_public_read ON item FOR SELECT
 | `app.tenant_id` | Reads | Writes |
 |---|---|---|
 | A business ID | Its rows, drafts included | Its rows only, and never into another business |
-| `0` (`CROSS_TENANT`) | Every business's rows, but no draft menus and no items of draft menus | None: the public policy is `FOR SELECT` only |
+| `0` (`CROSS_TENANT`, the *public read* policies) | Every business's rows, but no draft menus and no items of draft menus | None: the public policy is `FOR SELECT` only |
 | Unset, empty or `-1` | Nothing | Nothing |
 
 So the database is stricter than Hibernate's root tenant: the marketplace scope can only read, and only what customers may see. A bug in a public endpoint cannot write, and cannot show an owner's unpublished menu.

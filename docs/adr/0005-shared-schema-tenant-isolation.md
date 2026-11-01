@@ -11,15 +11,15 @@ The public marketplace must still read across tenants: the home page lists every
 
 ## Decision
 
-- **A shared schema with a discriminator column** (`tenant_id`), kept from slice 1a.
+- **A shared schema with a discriminator column** (`tenant_id`), kept from slice 1a: the *pool model*, in the terms AWS uses for SaaS (against *silo* and *bridge*, below).
 - **Hibernate's `@TenantId`** on every tenant-owned entity, fed by a thread-bound tenant scope that each request opens from its URL before its transaction. With no scope, tenant-owned queries find nothing (fail closed). The public marketplace runs in Hibernate's root tenant, which skips the filter (slice 3a).
 - **PostgreSQL Row-Level Security** under it, with the tenant passed to each pooled connection and a runtime database role that cannot bypass the policies. The public scope may only read, and cannot see draft menus (slice 3b).
 - **Open Session in View off**, so a Hibernate session opens with the transaction, after the tenant is known.
 
 Rejected:
 
-- **A schema per tenant.** Strong separation and easy per-tenant backups, but every migration runs once per schema, the number of tables grows with every business signing up, and the public marketplace would need a query per schema, or a union across them, to list businesses. It fits a few large tenants, not many small ones.
-- **A database per tenant.** The strongest isolation, and a cost per business, which the cost rules exclude.
+- **A schema per tenant** (bridge). Strong separation and easy per-tenant backups, but every migration runs once per schema, the number of tables grows with every business signing up, and the public marketplace would need a query per schema, or a union across them, to list businesses. It fits a few large tenants, not many small ones.
+- **A database per tenant** (silo). The strongest isolation, and a cost per business, which the cost rules exclude.
 - **Scoped queries alone** (`findByIdAndTenantId` everywhere). Kept as a layer, but not enough on its own: nothing stops the next query from forgetting the tenant.
 - **Hibernate filters (`@Filter`) enabled by hand.** The mechanism `@TenantId` is built on, but they must be enabled on every session, they do not apply to loads by ID, and they do not fill the tenant on insert.
 

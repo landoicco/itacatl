@@ -8,15 +8,13 @@ import org.springframework.test.context.DynamicPropertyRegistrar;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * PostgreSQL for full-application tests ({@code @SpringBootTest}), connected like production:
- * Flyway migrates as the tables' owner, and the application connects as itacatl_app, subject to
- * Row-Level Security.
+ * PostgreSQL for full-application tests, connected like production: Flyway as the owner, the
+ * application as itacatl_app, subject to Row-Level Security.
  */
 @TestConfiguration(proxyBeanMethods = false)
 public class AppRoleTestcontainersConfiguration {
 
-  // Only Flyway's connection comes from the container (its owner). Without the type, the
-  // application's connection would come from it too, and bypass the policies
+  // Only Flyway's connection: without the type, the application would connect as the owner too
   @Bean
   @ServiceConnection(type = FlywayConnectionDetails.class)
   PostgreSQLContainer postgresContainer() {

@@ -30,8 +30,8 @@ $$;
 -- Each table gets two policies, and a row is visible if either allows it:
 -- - <table>_tenant: reads and writes within the connection's business. WITH CHECK also stops an
 --   insert or update from moving a row into another business.
--- - <table>_public_read: the marketplace reads every business, but only SELECT, so the
---   cross-tenant scope can never write.
+-- - <table>_public_read: the marketplace reads every business, but only SELECT. This is the
+--   application's CROSS_TENANT scope (app_tenant() = 0), which can never write.
 
 ALTER TABLE business_hours ENABLE ROW LEVEL SECURITY;
 CREATE POLICY business_hours_tenant ON business_hours

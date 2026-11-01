@@ -40,8 +40,7 @@ public class TenantConnectionProvider
     hibernateProperties.put(MultiTenancySettings.MULTI_TENANT_CONNECTION_PROVIDER, this);
   }
 
-  // For work outside a session, such as reading the schema's metadata. Nothing is set, so the
-  // policies see no business
+  // Outside a session (schema metadata): no tenant, so the policies show no business
   @Override
   public Connection getAnyConnection() throws SQLException {
     return dataSource.getConnection();
@@ -55,9 +54,7 @@ public class TenantConnectionProvider
   @Override
   public Connection getConnection(Long tenantId) throws SQLException {
     Connection connection = dataSource.getConnection();
-    // For the connection's whole session, not one transaction: Hibernate takes the connection
-    // before it begins the transaction. Always set, so whatever a previous borrower left is
-    // replaced
+    // Session-level (false): Hibernate takes the connection before the transaction begins
     try (PreparedStatement statement =
         connection.prepareStatement("SELECT set_config('app.tenant_id', ?, false)")) {
       statement.setString(1, tenantId.toString());
@@ -69,8 +66,7 @@ public class TenantConnectionProvider
     return connection;
   }
 
-  // The pool keeps the connection open, so the setting is cleared before it is reused, also by
-  // code that takes connections from the pool directly (Spring Session, Flyway)
+  // Cleared before the pool hands the connection to anyone else, Spring Session included
   @Override
   public void releaseConnection(Long tenantId, Connection connection) throws SQLException {
     try (Statement statement = connection.createStatement()) {
@@ -83,8 +79,7 @@ public class TenantConnectionProvider
     }
   }
 
-  // Hibernate may otherwise release and take a connection again between statements, and set the
-  // tenant each time
+  // One connection per session, so the tenant is set once
   @Override
   public boolean supportsAggressiveRelease() {
     return false;

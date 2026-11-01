@@ -7,10 +7,8 @@ import org.springframework.boot.webmvc.test.autoconfigure.MockMvcBuilderCustomiz
 import org.springframework.context.annotation.Bean;
 
 /**
- * MockMvc runs a request on the test's own thread, which is in the cross-tenant scope
- * (CrossTenantTestExecutionListener). This filter runs each request as {@link TenantContext#NONE}
- * instead, like a server thread, so an endpoint only sees the tenant data its URL rule in
- * TenantConfig gives it, in tests as in production. Import it in full-application HTTP tests.
+ * Starts each MockMvc request as {@link TenantContext#NONE}, like a server thread, instead of in
+ * the test thread's cross-tenant scope. Import it in full-application HTTP tests.
  */
 @TestConfiguration(proxyBeanMethods = false)
 public class ServerThreadMockMvcConfig {
