@@ -95,17 +95,28 @@ A Spring bean registered through a `HibernatePropertiesCustomizer` would also wo
 
 ### The interceptor and the URL rules
 
-`TenantConfig` maps URLs to tenants in one place:
+One interceptor runs on every `/api/**` request, and `TenantConfig.tenantOf` picks its tenant from the URL, checked in this order:
 
-| URL | Tenant | Why |
-|---|---|---|
-| `/api/businesses/**`, `/api/menus/**` | `CROSS_TENANT` | The public marketplace lists every business and its published menus |
-| `/api/manage/businesses/{slug}/**` | The business with that slug | An owner works on one business at a time |
-| Anything else (`/api/auth/**`) | `NONE` | Sign-in and the current user only read accounts and memberships |
+| URL | Method | Tenant | Why |
+|---|---|---|---|
+| `/api/manage/businesses/{slug}/**` | Any | The business with that slug | An owner works on one business at a time |
+| `/api/businesses/**`, `/api/menus/**` | `GET`, `HEAD` | `CROSS_TENANT` | The public marketplace lists every business and its published menus |
+| Anything else | Any | `NONE` | Sign-in and the current user only read accounts and memberships |
 
-For management URLs, the interceptor looks the slug up (`findBySlug`, one indexed query) and opens that business's scope. It does not check permissions: `@PreAuthorize` on the service still decides whether this user may work in that business, and an unknown slug stays `NONE`, so the service answers it as before.
+The rules are deliberately narrow:
 
-A Spring MVC `HandlerInterceptor` was chosen over a servlet filter because it runs after Spring has matched the URL, so `{slug}` is already parsed. `afterCompletion` runs even when the controller throws, so a failed request never leaves its tenant on a thread that the server reuses for the next request.
+- **Cross-tenant only for reads.** `CROSS_TENANT` turns the filter off and lets an insert carry any business's ID. A write added under a public path later, such as a customer's reservation in slice 4, gets `NONE` until it is given a scope on purpose.
+- **The slug comes from the rule's own pattern**, parsed with Spring's `PathPattern`, not from the controller's `{slug}` variable. A controller that names its variable differently cannot silently change the tenant.
+- **One interceptor, one scope per request.** Two interceptors on overlapping paths would each open a scope, and closing them in the wrong order leaves one open.
+
+For management URLs, the slug is looked up (`findBySlug`, one indexed query) and that business's scope is opened. It does not check permissions: `@PreAuthorize` on the service still decides whether this user may work in that business, and an unknown slug stays `NONE`, so the service answers it as before.
+
+`TenantConfig` gets `BusinessRepository` through an `ObjectProvider`, looked up on first use, so web slice tests (`@WebMvcTest`), which load every `WebMvcConfigurer` but no repositories, still start.
+
+A Spring MVC interceptor was chosen over a servlet filter because it runs after Spring has parsed the request path to find the controller, and it is the usual Spring MVC hook for a concern that wraps every handler. Its scope is closed in two places:
+
+- **`afterCompletion`**, which runs even when the controller throws, so a failed request never leaves its tenant on a thread that the server reuses for the next request.
+- **`afterConcurrentHandlingStarted`**, for asynchronous requests (server-sent events, `Callable`, `DeferredResult`): the thread is released before the response is complete, and `afterCompletion` would run later on another thread. The async dispatch that completes the request passes through the interceptor again and gets its own scope. Work that runs on an executor in between starts as `NONE` (see [traps](#traps)).
 
 ### A management request, step by step
 
@@ -148,6 +159,7 @@ It is off (`spring.jpa.open-in-view=false`), which most production guides recomm
 | Sign-in, current user | `NONE` | Nothing: the default |
 | Seed at startup | `CROSS_TENANT` | `SeedConfig`, around `MarketplaceSeeder.seed` |
 | Tests | `CROSS_TENANT` | `CrossTenantTestExecutionListener` |
+| Requests in HTTP tests | `NONE`, then what `TenantConfig` gives them | `ServerThreadMockMvcConfig` |
 
 The seed creates several businesses in one transaction and sets each row's tenant itself, which the root tenant allows. Slice 3b revisits it, since Row-Level Security will make the cross-tenant scope read-only.
 
@@ -164,7 +176,9 @@ A table that belongs to no business (accounts, sessions, in the future customers
 
 ### A new endpoint
 
-Put it under one of the URL patterns in `TenantConfig`. A management endpoint under `/api/manage/businesses/{slug}/` gets its business's scope without any code. An endpoint outside every pattern runs as `NONE` and sees no tenant data: if it needs some, add a pattern, deliberately, rather than opening a scope inside the controller.
+Put it under one of the rules in `TenantConfig`. A management endpoint under `/api/manage/businesses/{slug}/` gets its business's scope without any code. A public read under `/api/businesses/` or `/api/menus/` gets `CROSS_TENANT`. Anything else, including a write under the public paths, runs as `NONE` and sees no tenant data: if it needs some, add a rule to `tenantOf`, deliberately, with a case in `TenantConfigTest`, rather than opening a scope inside the controller.
+
+Its HTTP test imports `ServerThreadMockMvcConfig`, so the request runs with the scope it would get in production.
 
 ### Work outside a request
 
@@ -190,15 +204,21 @@ for (Long tenantId : tenantIds) {
 - **Always close a scope.** Use try-with-resources. A scope left open on a pooled thread would hand its tenant to whichever request that thread serves next.
 - **The root tenant trusts the entity.** In `CROSS_TENANT`, an insert keeps the `tenantId` it was given, and one without a tenant fails on `NOT NULL`. Code that runs cross-tenant sets the tenant on every row itself, as the seed and `MarketplaceTestData` do.
 - **Native SQL is not filtered.** `JdbcTemplate` and native queries go around Hibernate. Row-Level Security (slice 3b) covers them.
-- **Web slice tests load `TenantConfig`.** `@WebMvcTest` includes every `WebMvcConfigurer`, and `TenantConfig` needs `BusinessRepository`, so those tests declare it as a `@MockitoBean`.
+- **MockMvc runs requests on the test's thread.** That thread is in `CROSS_TENANT`, so without `ServerThreadMockMvcConfig` an endpoint that no rule covers would see every business in tests and nothing in production.
+
+## Known limitations
+
+- **The slug is resolved more than once per management request:** by the interceptor, by `BusinessAccess` for the permission, and by the service, which needs the business itself (its time zone, for instance). Each is one indexed query. Passing the business from the interceptor to the service would save them, at the cost of services that depend on a request attribute instead of their arguments.
 
 ## Tests
 
 | Test | What it proves |
 |---|---|
 | `TenantIsolationIntegrationTest` | In a business's scope, repositories see only its rows, also through `findById` and queries that do not mention the tenant; new rows get that business and rows of another are rejected; `NONE` sees no tenant rows but still sees businesses; `CROSS_TENANT` sees all. Over HTTP, requests that start as `NONE` get the right scope from the interceptor, and leave the thread as they found it |
+| `TenantConfigTest` | The URL rules: marketplace reads are cross-tenant, writes under public paths get `NONE`, management URLs get their business, unknown slugs and other URLs get `NONE` |
+| `TenantScopeInterceptorTest` | A completed request, and an async one that releases its thread, leave the thread without their tenant |
 | `TenantContextTest` | Scopes nest and restore the previous tenant; a scope is invisible to other threads |
 | `TenantIntegrityIntegrationTest` | The composite foreign keys reject rows that mix businesses |
 | `MenuManagementServiceIntegrationTest`, `CatalogServiceIntegrationTest` | The scoped lookups: another business's ID is a 404 |
 
-`TenantIsolationIntegrationTest` is a full-application test without `@Transactional`, so each repository call opens its own session in the scope current at that moment, as a request does. Every other Spring test runs in `CROSS_TENANT` (`CrossTenantTestExecutionListener`, registered in `src/test/resources/META-INF/spring.factories`): their fixtures build several businesses inside one test transaction, which no single business's scope could do.
+`TenantIsolationIntegrationTest` is a full-application test without `@Transactional`, so each repository call opens its own session in the scope current at that moment, as a request does. Every other Spring test runs in `CROSS_TENANT` (`CrossTenantTestExecutionListener`, registered in `src/test/resources/META-INF/spring.factories`): their fixtures build several businesses inside one test transaction, which no single business's scope could do. Their MockMvc requests run on the same thread, so the full-application HTTP tests import `ServerThreadMockMvcConfig`, a filter that starts each request as `NONE`, as on a server thread.
