@@ -198,7 +198,7 @@ Every pull request updates the documentation it affects, so `main` and its docs 
 
 Versions follow [Semantic Versioning](https://semver.org), with one version for the whole repository: the backend and the frontend ship together, so `backend/pom.xml` and `frontend/package.json` always carry the same number.
 
-- **`0.y.z` until the first production deploy.** Each minor version closes a milestone of the [roadmap](docs/product-spec.md#rework-roadmap), starting with `0.1.0`: the marketplace and the owner panel. While the schema can still be squashed into a clean baseline ([ADR 0003](docs/adr/0003-squash-migrations-before-first-deploy.md)), a new version may need a fresh database.
+- **`0.y.z` until the first production deploy.** Each minor version closes a milestone of the [roadmap](docs/product-spec.md#rework-roadmap): `0.1.0` the marketplace and the owner panel, `0.2.0` tenant isolation with Hibernate and Row-Level Security. While the schema can still be squashed into a clean baseline ([ADR 0003](docs/adr/0003-squash-migrations-before-first-deploy.md)), a new version may need a fresh database.
 - **`1.0.0` with the first production deploy.** From then on, migrations are never edited and an upgrade keeps the data.
 - **Cutting a release:** the pull request that completes a milestone sets the new version in both files. Once it is merged, `main` gets an annotated tag and a GitHub Release. Its notes are written by hand in `release-desc-body.md` (git-ignored), summarizing what the milestone delivers rather than listing pull requests:
 

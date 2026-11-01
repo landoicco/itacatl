@@ -21,6 +21,10 @@ updates:
       # Types must match the Node version we run (see Runtime versions in the infra plan)
       - dependency-name: "@types/node"
         update-types: [version-update:semver-major]
+      # typescript-eslint 8 supports TypeScript <6.1 only, so npm ci fails on 7. Remove once
+      # typescript-eslint's peer range includes the new major
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
     groups:
       npm-minor-and-patch:
         update-types: [minor, patch]
