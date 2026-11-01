@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import dev.licaza.itacatl.domain.OpeningStatus;
 import dev.licaza.itacatl.dto.BusinessSummaryDTO;
 import dev.licaza.itacatl.exception.ResourceNotFoundException;
+import dev.licaza.itacatl.repo.BusinessRepository;
 import dev.licaza.itacatl.security.SecurityConfig;
 import dev.licaza.itacatl.service.BusinessService;
 import java.time.LocalDateTime;
@@ -30,6 +31,10 @@ class BusinessControllerIntegrationTest {
   @Autowired private MockMvc mockMvc;
 
   @MockitoBean private BusinessService businessService;
+
+  // The web slice includes TenantConfig, which looks up management URLs' businesses. These public
+  // endpoints never call it
+  @MockitoBean private BusinessRepository businessRepository;
 
   @Test
   void getBusinesses_ReturnsOpeningStatusAsLocalIsoDateTimes() throws Exception {
