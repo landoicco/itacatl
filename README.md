@@ -181,6 +181,8 @@ The management API, under `/api/manage/businesses/{slug}`, is for members of tha
 
 The toolchain (JDK, Maven, Node) is pinned in `flake.nix`. Run `nix develop` to enter it.
 
+AI assistants are optional and not part of the toolchain. Those that read [`AGENTS.md`](AGENTS.md) get the project's conventions and working rules; `CLAUDE.md` imports it for Claude Code.
+
 ```shell
 # backend/
 mvn verify          # format check, build, unit and integration tests

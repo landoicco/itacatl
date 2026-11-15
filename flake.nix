@@ -4,36 +4,29 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
-    nix-claude-code.url = "github:ryoppippi/nix-claude-code";
   };
 
-  outputs = { self, nixpkgs, flake-utils, nix-claude-code }:
+  # AI assistants are deliberately left out: each developer brings their own, or none.
+  outputs = { self, nixpkgs, flake-utils }:
     flake-utils.lib.eachDefaultSystem (system:
       let
-        pkgs = import nixpkgs {
-          inherit system;
-          # Claude Code is unfree; nothing else is allowed in by accident
-          config.allowUnfreePredicate = pkg: nixpkgs.lib.getName pkg == "claude-code";
-        };
+        pkgs = nixpkgs.legacyPackages.${system};
 
         # The project's tools. Add new ones here, e.g. with pkgs; [ nodejs python3 ]
         tools = with pkgs; [
           jdk21_headless # backend build and Spotless
           maven
           nodejs_22      # frontend build, lint and Prettier
-          jq             # used by the Claude Code formatting hook
+          jq             # reads the payload in .claude/hooks/format.sh
           gh             # PRs and CI from the terminal; credential helper for git push
         ];
-
-        claude = nix-claude-code.packages.${system}.default;
       in
       {
         # nix develop
         devShells.default = pkgs.mkShell {
-          packages = tools ++ [ claude ];
+          packages = tools;
 
           # Versions come from the Nix packages, so the banner costs no process startups
-          # (except Claude Code, whose package does not expose a version attribute reliably).
           shellHook = ''
             echo ""
             echo "🛠️  itacatl dev toolkit"
@@ -42,7 +35,6 @@
             echo "   🟢 Node.js  ${pkgs.nodejs_22.version}"
             echo "   🔍 jq       ${pkgs.jq.version}"
             echo "   🐙 gh       ${pkgs.gh.version}"
-            echo "   🤖 Claude   $(claude --version | cut -d' ' -f1)"
             echo ""
           '';
         };
