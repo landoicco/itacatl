@@ -137,7 +137,7 @@ Layers, patterns and the rules that keep them: [architecture guide](docs/archite
 
 **Delivery**
 - **One image, every environment:** Spring profiles change configuration only; the `aws` profile logs ECS JSON for CloudWatch.
-- **Guarded `main`:** CI (format, lint, tests, image builds) is required by a ruleset; actions are pinned to commit SHAs, and Dependabot sends grouped weekly updates.
+- **Guarded `main`:** CI (format, lint, tests, image builds) is required by a ruleset; actions are pinned to commit SHAs, and Dependabot sends grouped weekly updates ([CI and safeguards](docs/ci.md)).
 - **Reproducible toolchain:** JDK, Maven and Node are pinned in a Nix flake.
 
 ## Stack
@@ -181,6 +181,8 @@ The management API, under `/api/manage/businesses/{slug}`, is for members of tha
 
 The toolchain (JDK, Maven, Node) is pinned in `flake.nix`. Run `nix develop` to enter it.
 
+AI assistants are optional and not part of the toolchain. Those that read [`AGENTS.md`](AGENTS.md) get the project's conventions and working rules; `CLAUDE.md` imports it for Claude Code.
+
 ```shell
 # backend/
 mvn verify          # format check, build, unit and integration tests
@@ -220,6 +222,7 @@ gh release create v0.1.0 --title "v0.1.0" --notes-file release-desc-body.md
 | [Owner panel](docs/owner-panel.md) | The panel's screens, API layer, session handling, cache updates, forms and their decisions |
 | [Theming](docs/theming.md) | Design tokens, themes and how to add a vertical |
 | [i18n guide](docs/i18n.md) | How translations are wired in, dates and times, safety nets |
+| [CI and safeguards](docs/ci.md) | CI jobs, the ruleset on `main`, Dependabot and runtime upgrades |
 | [Infra plan](docs/infra-plan.md) | AWS architecture, cost rules, work phases |
 | [ADRs](docs/adr/) | Architecture decisions and their trade-offs |
 

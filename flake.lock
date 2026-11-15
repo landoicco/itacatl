@@ -18,41 +18,7 @@
         "type": "github"
       }
     },
-    "nix-claude-code": {
-      "inputs": {
-        "nixpkgs": "nixpkgs"
-      },
-      "locked": {
-        "lastModified": 1791060323,
-        "narHash": "sha256-yY04wa12KQhZ4YtIZ6OIcrhoop0KUmlZU1cc7P+Tp1M=",
-        "owner": "ryoppippi",
-        "repo": "nix-claude-code",
-        "rev": "d0aed0d8f9a644fb74f041512b2a6a3ad05b5a47",
-        "type": "github"
-      },
-      "original": {
-        "owner": "ryoppippi",
-        "repo": "nix-claude-code",
-        "type": "github"
-      }
-    },
     "nixpkgs": {
-      "locked": {
-        "lastModified": 1789785513,
-        "narHash": "sha256-B44WL6h0XoLjJ41bUPJk0X5SDinLCII//6EcBLXKiJ0=",
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "20b1ddd1aa5ace70c9468305030aa4f9ef79671b",
-        "type": "github"
-      },
-      "original": {
-        "owner": "NixOS",
-        "ref": "nixos-unstable",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
-    "nixpkgs_2": {
       "locked": {
         "lastModified": 1791048980,
         "narHash": "sha256-KgItSKML8Xvte0B7/uGnBDsYzSnnKHcOaiUbgWBXLXw=",
@@ -71,8 +37,7 @@
     "root": {
       "inputs": {
         "flake-utils": "flake-utils",
-        "nix-claude-code": "nix-claude-code",
-        "nixpkgs": "nixpkgs_2"
+        "nixpkgs": "nixpkgs"
       }
     },
     "systems": {
