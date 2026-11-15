@@ -17,7 +17,6 @@
           jdk21_headless # backend build and Spotless
           maven
           nodejs_22      # frontend build, lint and Prettier
-          jq             # reads the payload in .claude/hooks/format.sh
           gh             # PRs and CI from the terminal; credential helper for git push
         ];
       in
@@ -33,7 +32,6 @@
             echo "   ☕ Java     ${pkgs.jdk21_headless.version}"
             echo "   📦 Maven    ${pkgs.maven.version}"
             echo "   🟢 Node.js  ${pkgs.nodejs_22.version}"
-            echo "   🔍 jq       ${pkgs.jq.version}"
             echo "   🐙 gh       ${pkgs.gh.version}"
             echo ""
           '';
