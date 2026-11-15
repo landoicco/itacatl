@@ -1,6 +1,6 @@
 # Security
 
-How business owners and staff sign in, how their sessions are kept, and how the API protects them. This is the first use of **Spring Security** in the project, so the guide starts with the framework's concepts and then shows how each one is wired in here, from the filter chain to the per-business permissions of the management API. Account tables are in the [domain model](domain-model.md); the decision to use sessions instead of JWT is [ADR 0004](adr/0004-server-side-sessions-instead-of-jwt.md).
+How business owners and staff sign in, how their sessions are kept, and how the API protects them. The guide starts with the concepts of **Spring Security** and then shows how each one is wired in here, from the filter chain to the per-business permissions of the management API. Account tables are in the [domain model](domain-model.md); the decision to use sessions instead of JWT is [ADR 0004](adr/0004-server-side-sessions-instead-of-jwt.md).
 
 Customers have no account: they browse the public marketplace and, from slice 5, verify a phone number when they reserve ([product spec](product-spec.md#customer-identity)).
 
@@ -116,15 +116,7 @@ public interface MenuManagementService {
 - **What it checks.** `canManage` is owners only; `canView` is owners and staff. Both ask the database whether the user has one of those roles in the business with that slug, in one `exists` query. Anonymous requests never get this far (the URL rules answer 401), and `BusinessAccess` still returns `false` for them.
 - **On the interface, not the controller.** The permission is part of the service's contract: any future caller (a scheduled job, a second controller) gets the same check, and the rule is next to the method's documentation.
 - **Then the data is scoped too.** Permission on the slug is not enough on its own: a menu ID could belong to another business. The services look every ID up together with the business (`findByIdAndTenantId`), so a foreign ID answers 404, not someone else's data. The two answers differ on purpose: slugs are public (every business is on the marketplace), so a 403 for one reveals nothing, while a 403 for an internal ID would confirm that it exists somewhere.
-- **And Hibernate filters underneath.** Each management request runs in its business's tenant scope, so even a query that forgot the business would only see that business's rows ([tenant isolation](tenant-isolation.md)). Below that, PostgreSQL's Row-Level Security applies the same rule to every statement, native SQL included, since the application connects as a role that cannot bypass it.
-
-| Layer | Question | Answer when it fails |
-|---|---|---|
-| URL rules (`authorizeHttpRequests`) | Is someone signed in? | 401 `AUTHENTICATION_REQUIRED` |
-| Method security (`@PreAuthorize`) | Is this user an owner, or a member, of this business? | 403 `ACCESS_DENIED` |
-| Tenant-scoped queries | Does this ID belong to this business? | 404 `…_NOT_FOUND` |
-| Hibernate tenant filter (`@TenantId`) | Does this row belong to the request's business, whatever the query says? | Not found, like the row above |
-| Row-Level Security (PostgreSQL) | Does this row belong to the connection's business, whatever sent the statement? | Not found when reading; an error when writing into another business |
+- **And two layers underneath.** Hibernate's tenant filter and PostgreSQL's Row-Level Security apply the request's business to every query, even one that forgot it. Every layer, and what it answers when it fails, is in the [tenant isolation guide](tenant-isolation.md#the-problem).
 
 ## A request, step by step
 
@@ -283,9 +275,7 @@ A page on another origin cannot read the cookie (same-origin policy), so it cann
 | Test | What it proves |
 |---|---|
 | `AuthControllerIntegrationTest` | The whole flow over HTTP with the real filters, CSRF and sessions in PostgreSQL: sign-in like a browser, cookie flags, wrong password and unknown email give the same error, CSRF is required, sign-out ends the session, the marketplace stays public |
-| `BusinessControllerIntegrationTest` | Imports the real `SecurityConfig`, so the public read API is proven public |
-| `AccountRepositoryIntegrationTest` | Memberships per user, lowercase emails, one membership per user and business |
-| `MarketplaceSeederIntegrationTest` | Seeded accounts can sign in with the configured password |
+| `AccountRepositoryIntegrationTest` | A user's businesses in one query, lowercase emails, one membership per user and business |
 | `BusinessAccessIntegrationTest` | Owners manage and view, staff only view, nobody reaches another business, anonymous gets nothing |
 | `CatalogControllerIntegrationTest`, `ManagedMenuControllerIntegrationTest` | The management API over HTTP with real sign-in: the owner's flow, staff denied on changes, other owners denied, rule errors as 422 |
 

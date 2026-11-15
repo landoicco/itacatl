@@ -1,6 +1,6 @@
 # Product Spec
 
-> Name: **itacatl**. In Nahuatl, *itacatl* is the food you carry for the road ("despensa para el camino", Molina 1571; see the [Gran Diccionario Náhuatl](https://gdn.iib.unam.mx/diccionario/itacatl)). It is the root of the Mexican Spanish *itacate*. The production domain is not decided yet.
+> Name: **itacatl**. In Nahuatl, *itacatl* is the food you carry for the road ("despensa para el camino", Molina 1571; see the [Gran Diccionario Náhuatl](https://gdn.iib.unam.mx/diccionario/itacatl)). It is the root of the Mexican Spanish *itacate*.
 
 ## Vision
 
@@ -128,7 +128,7 @@ Any active state can also move to `EXPIRED` or `CANCELLED`, and the held stock r
 
 Code, API, logs and docs are in English; deployments serve their users in their own language, Spanish (`es-MX`) first. The rule is that nothing a user reads is hardcoded. The [i18n guide](i18n.md) explains how the frontend implements it.
 
-- **Frontend:** `react-i18next`, one JSON catalog per locale (`en`, `es-MX`) with English keys grouped by screen. A test fails when the catalogs do not have the same keys.
+- **UI text:** one catalog per locale, every locale with the same keys.
 - **API errors:** stable codes (e.g. `ITEM_SOLD_OUT`) plus parameters, never sentences; the client translates them.
 - **Server-generated text** (WhatsApp messages): Spring `MessageSource` bundles, rendered in the customer's locale.
 - **Formatting:** numbers, prices and dates go through locale-aware formatters (`Intl` in the browser), never string concatenation.
@@ -143,7 +143,7 @@ Code, API, logs and docs are in English; deployments serve their users in their 
 
 ## Sample data
 
-`docker compose up` seeds sample ice cream shops with their catalogs and menus, so the whole flow can be tried locally. The seed file is a deployment setting, like the UI's default locale: English by default, so anyone can read the demo, and a Spanish (`es-MX`) file for a Mexican deployment. Business content is stored as written, not machine-translated.
+`docker compose up` seeds sample ice cream shops with their catalogs, menus and demo accounts, so the whole flow can be tried locally. Like the default locale, the seed is chosen per deployment: English by default, so anyone can read the demo, and Spanish for a Mexican deployment ([domain model](domain-model.md#sample-data)).
 
 ## Rework roadmap
 
@@ -152,7 +152,7 @@ The rework from the product catalog to this marketplace is built in vertical sli
 | # | Slice | Scope | Visible result |
 |---|---|---|---|
 | 1a | Domain model and read API | Marketplace schema as a squashed `V1` ([ADR 0003](adr/0003-squash-migrations-before-first-deploy.md)) with composite tenant foreign keys; the product catalog stays in a temporary migration so the current UI keeps working. Entities, services, public read API, ice cream shop seed data ([domain model](domain-model.md)) | API covered by integration tests |
-| 1b | Customer UI and redesign | Agreed visual style, then a mobile-first UI: ice cream shops, today's menu, "opens tomorrow at 12:00" when closed. Removes the product catalog: its UI, its code, the CSV seed and the temporary migration | Product screenshots in the README |
+| 1b | Customer UI and redesign | Agreed visual style, then a mobile-first UI: ice cream shops, today's menu, "opens tomorrow at 12:00" when closed. Removes the product catalog: its UI, its code, the CSV seed and the temporary migration | The marketplace on phone and desktop |
 | 2a | Owner and staff accounts | Accounts with per-business memberships, Spring Security sign-in with sessions in PostgreSQL (Spring Session JDBC) and CSRF ([security guide](security.md)) | Sign-in API covered by integration tests |
 | 2b | Owner API | Item catalog (create, edit, archive), menus built by duplicating or picking from the catalog, publishing; every endpoint checks the user's membership | API covered by integration tests |
 | 2c | Owner panel | Sign-in screen, catalog and menu editor, mobile-first | Business panel |
@@ -181,7 +181,3 @@ Planned once the core flow, security and infrastructure are solid:
 - Reviews, ratings and loyalty programs.
 - Recurring calendar rules beyond a weekly schedule plus date exceptions.
 - Age verification.
-
-## Open questions
-
-- Production domain.

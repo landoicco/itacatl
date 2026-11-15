@@ -136,6 +136,4 @@ components/, api/, theme/ or i18n/.
 
 Both sides freeze time in tests: the backend injects a fixed `Clock`, the frontend fakes only `Date` (`vi.useFakeTimers({ toFake: ["Date"] })`) so promises and timers keep working.
 
-Full-application tests (`@SpringBootTest`) do not import `FixedClockConfig`: the application already has a `Clock` bean, so a second one fails the context. They inject the real `Clock` and compute dates from it, like `ManagedMenuControllerIntegrationTest` does for "tomorrow".
-
-Every Spring test starts in the cross-tenant scope (`CrossTenantTestExecutionListener`). Slice tests connect as the tables' owner, so their fixtures can build several businesses in one transaction; full-application tests connect as `itacatl_app`, like production, and write each business's rows in its scope ([tenant isolation](tenant-isolation.md#tests)).
+Setup that belongs to one mechanism is in its guide: the clock in the [domain model](domain-model.md#gotchas), tenant scopes and database roles in [tenant isolation](tenant-isolation.md#tests), signing in from tests in [security](security.md#tests).

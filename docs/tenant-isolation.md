@@ -1,6 +1,6 @@
 # Tenant isolation
 
-How the marketplace keeps each business's data apart while every business shares one database and one schema. The guide starts with a summary and the problem, then covers the two mechanisms that enforce isolation, each with its concepts first and its wiring after: Hibernate's tenant filter in the application, and PostgreSQL's Row-Level Security in the database. It ends with which tenant every part of the application runs as, how to extend it, and the traps to avoid. The decision itself is [ADR 0005](adr/0005-shared-schema-tenant-isolation.md). The tables are in the [domain model](domain-model.md), and permissions in the [security guide](security.md).
+How the marketplace keeps each business's data apart while every business shares one database and one schema: Hibernate's tenant filter in the application, and PostgreSQL's Row-Level Security in the database. The decision is [ADR 0005](adr/0005-shared-schema-tenant-isolation.md); the tables are in the [domain model](domain-model.md), and permissions in the [security guide](security.md).
 
 ## In one page
 
@@ -35,15 +35,16 @@ That is cheap and simple to run, but isolation then depends on every query remem
 
 So isolation is built in **layers**, each one catching what the one above misses:
 
-| Layer | Where | What it stops | Since |
+| Layer | Where | What it stops | Answer when it fails |
 |---|---|---|---|
-| Permission on the business | `@PreAuthorize` with `BusinessAccess` ([security guide](security.md#per-business-permissions-method-security)) | A user acting on a business they are not a member of | Slice 2b |
-| Scoped lookups | `findByIdAndTenantId` in the services | An ID of another business in a URL of your own: answered 404 | Slice 2b |
-| **Hibernate tenant filter** | `@TenantId` and `TenantContext` (this guide) | A query that forgets the tenant: Hibernate adds it to every query and every insert | Slice 3a |
-| Composite foreign keys | `(id, tenant_id)` references in `V1` ([domain model](domain-model.md#tenant-integrity-enforced-by-the-database)) | A row that mixes two businesses, e.g. one business's item in another's menu | Slice 1a |
-| **PostgreSQL Row-Level Security** | Policies in `V4` and `TenantConnectionProvider` (this guide) | Anything that goes around Hibernate, such as native SQL, or a bug in the filter itself | Slice 3b |
+| Signed in | URL rules in `SecurityConfig` ([security guide](security.md#access-rules)) | A request without a session | 401 `AUTHENTICATION_REQUIRED` |
+| Permission on the business | `@PreAuthorize` with `BusinessAccess` ([security guide](security.md#per-business-permissions-method-security)) | A user acting on a business they are not a member of | 403 `ACCESS_DENIED` |
+| Scoped lookups | `findByIdAndTenantId` in the services | An ID of another business in a URL of your own | 404 `…_NOT_FOUND` |
+| **Hibernate tenant filter** | `@TenantId` and `TenantContext` (this guide) | A query that forgets the tenant: Hibernate adds it to every query and every insert | Not found, like the row above |
+| Composite foreign keys | `(id, tenant_id)` references in `V1` ([domain model](domain-model.md#tenant-integrity-enforced-by-the-database)) | A row that mixes two businesses, e.g. one business's item in another's menu | The write fails |
+| **PostgreSQL Row-Level Security** | Policies in `V4` and `TenantConnectionProvider` (this guide) | Anything that goes around Hibernate, such as native SQL, or a bug in the filter itself | Not found when reading; an error when writing into another business |
 
-The first two are code that has to be written correctly every time. The Hibernate filter is written **once** and applies to every query, including those written in the future by someone who has never read this page. Row-Level Security does the same one level down, in the database, where no application code can skip it.
+The permission check and the scoped lookups are code that has to be written correctly every time. The Hibernate filter is written **once** and applies to every query, including those written in the future by someone who has never read this page. Row-Level Security does the same one level down, in the database, where no application code can skip it.
 
 ## Hibernate's multi-tenancy, in four concepts
 
@@ -331,8 +332,8 @@ Create `itacatl_app` with a password before the first migration, as `docker/post
 | `TenantConfigTest` | The URL rules: marketplace reads are cross-tenant, writes under public paths get `NONE`, management URLs get their business, unknown slugs and other URLs get `NONE` |
 | `TenantScopeInterceptorTest` | A completed request, and an async one that releases its thread, leave the thread without their tenant |
 | `TenantContextTest` | Scopes nest and restore the previous tenant; a scope is invisible to other threads |
-| `TenantIntegrityIntegrationTest` | The composite foreign keys reject rows that mix businesses |
-| `MenuManagementServiceIntegrationTest`, `CatalogServiceIntegrationTest` | The scoped lookups: another business's ID is a 404 |
+
+The composite foreign keys and the scoped lookups are tested with the domain model ([tests](domain-model.md#tests)).
 
 The tests connect in two ways:
 

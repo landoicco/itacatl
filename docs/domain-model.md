@@ -31,7 +31,7 @@ Accounts are a table plus memberships, not a business column on the user, so one
 
 This is the classic **catalog → offer → sale** pattern. The catalog changes rarely; menus change every day; orders (slice 4) will copy the name and price of what was sold.
 
-Code: entities in `backend/src/main/java/dev/licaza/itacatl/domain/`, schema in `db/migration/V1__create_marketplace_schema.sql` (marketplace) and `V2__create_accounts.sql` (accounts).
+Code: entities in `backend/src/main/java/dev/licaza/itacatl/domain/`, schema in `db/migration/`: `V1` the marketplace, `V2` accounts, `V3` sessions, `V4` Row-Level Security.
 
 ## Decisions
 
@@ -234,16 +234,14 @@ To add a business to the demo, add it to **both** seed files with the same item 
 | `MenuManagementServiceIntegrationTest` | The menu rules above: ended menus, drafts only, empty menus, duplicates, suggested prices, other businesses' IDs |
 | `GlobalExceptionHandlerTest` | Field errors with their constraint as code; unreadable bodies |
 | `TenantIntegrityIntegrationTest` | The composite foreign keys reject rows that mix businesses |
-| `TenantIsolationIntegrationTest` | Hibernate's tenant filter: in one business's scope, no query sees or creates another's rows ([tenant isolation](tenant-isolation.md#tests)) |
-| `RowLevelSecurityIntegrationTest` | The database's policies, with native SQL: no business reads or writes another's rows, the marketplace reads without drafts and cannot write |
-| `AccountRepositoryIntegrationTest` | A user's businesses in one query, lowercase emails, one membership per user and business |
-| `BusinessControllerIntegrationTest` | The HTTP contract: local ISO dates, Problem Details |
+| `BusinessControllerIntegrationTest` | The HTTP contract: local ISO dates, Problem Details, public without a session (it imports the real `SecurityConfig`) |
 | `MarketplaceSeederIntegrationTest` | Every seed file loads, follows the schedules, creates accounts that can sign in and is idempotent |
 
-Integration tests run against PostgreSQL in Testcontainers, with Flyway enabled and Hibernate validating the entities against the schema.
+Integration tests run against PostgreSQL in Testcontainers, with Flyway enabled and Hibernate validating the entities against the schema. The tests of tenant scopes and Row-Level Security are in the [tenant isolation guide](tenant-isolation.md#tests), and those of accounts and sign-in in the [security guide](security.md#tests).
 
 ## Gotchas
 
 - **Run `mvn clean` after deleting or renaming a migration.** Maven copies resources into `target/classes` but never removes old ones, so a deleted `V1__…sql` stays there and Flyway fails with "Found more than one migration with version 1". CI always builds from scratch, so it only bites locally.
+- **Full-application tests do not import `FixedClockConfig`.** The application already has a `Clock` bean, so a second one fails the context. They inject the real `Clock` and compute dates from it, like `ManagedMenuControllerIntegrationTest` does for "tomorrow".
 - **Tests that roll back never check a deferred constraint.** `fk_menu_item_item` is checked at commit, and `@DataJpaTest` rolls every test back, so a row that breaks it is silently accepted. `TenantIntegrityIntegrationTest` runs `SET CONSTRAINTS ALL IMMEDIATE`, which makes PostgreSQL check the pending rows at that point, as the commit would.
 - **Jackson 3 is stricter than Jackson 2.** `FAIL_ON_NULL_FOR_PRIMITIVES` is on by default: a JSON field missing for a primitive (`boolean`, `int`) fails instead of becoming `false` or `0`. Optional fields use wrapper types (`Boolean alcoholic` in `SeedFile`), and required numbers stay primitive so a missing value is caught.
