@@ -66,6 +66,6 @@ Format every file you edit (`mvn spotless:apply`, `npm run format`) before handi
 
 ## Working rules
 
-- **Don't run `git`, `gh`, `aws` or `terraform` commands** without the developer's explicit confirmation, read-only ones included. Suggest the exact command instead. Commits, pushes and applies are always made by the developer.
+- **Read-only `git` commands** (`status`, `log`, `diff`, `show`) are fine. Anything that changes the repository, and every `gh`, `aws` or `terraform` command, needs the developer's explicit confirmation: suggest the exact command instead. Commits, pushes and applies are always made by the developer.
 - **This repository is public.** Never commit secrets, credentials, AWS account IDs, personal data, or real phone numbers. Use placeholders and `.env.example`-style files.
 - **Cost rules are non-negotiable.** Any infrastructure change must follow the cost rules in `docs/infra-plan.md` (the target customers are small businesses). Flag anything that could create recurring AWS charges before writing it.
