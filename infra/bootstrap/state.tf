@@ -11,6 +11,7 @@ resource "aws_s3_bucket" "state" {
   bucket = local.state_bucket
 
   # Deleting it would lose every stack's state, and with it Terraform's record of what exists.
+  # It outlives the ephemeral deploys; removing it on purpose is in docs/terraform.md.
   lifecycle {
     prevent_destroy = true
   }
@@ -84,8 +85,11 @@ resource "aws_s3_bucket_lifecycle_configuration" "state" {
 
     filter {}
 
+    # A version expires only once it is older than the days AND not among the newest kept,
+    # so a stack applied rarely never loses its last rollback points.
     noncurrent_version_expiration {
-      noncurrent_days = var.noncurrent_version_days
+      noncurrent_days           = var.noncurrent_version_days
+      newer_noncurrent_versions = var.noncurrent_versions_kept
     }
 
     abort_incomplete_multipart_upload {

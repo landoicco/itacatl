@@ -8,8 +8,8 @@ terraform {
     }
   }
 
-  # No backend block yet: the first apply keeps its state locally, because the bucket that would
-  # hold it does not exist. The runbook then migrates it with backend.tf.example (docs/terraform.md).
+  # The backend is declared in backend.tf, created from backend.tf.example once the bucket exists:
+  # the first apply has to keep its state locally (runbook in docs/terraform.md).
 }
 
 provider "aws" {

@@ -22,4 +22,10 @@ pkgs.stdenvNoCC.mkDerivation {
   nativeBuildInputs = [ pkgs.unzip ];
   sourceRoot = ".";
   installPhase = "install -Dm755 terraform $out/bin/terraform";
+
+  # Declared so Nix treats it as the unfree package it is: the flake has to allow it by name.
+  meta = {
+    license = pkgs.lib.licenses.bsl11;
+    mainProgram = "terraform";
+  };
 }

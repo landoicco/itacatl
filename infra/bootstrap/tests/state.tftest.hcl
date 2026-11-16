@@ -78,6 +78,11 @@ run "old_versions_expire" {
     condition     = aws_s3_bucket_lifecycle_configuration.state.rule[0].noncurrent_version_expiration[0].noncurrent_days == 30
     error_message = "Old state versions must expire after the configured days."
   }
+
+  assert {
+    condition     = aws_s3_bucket_lifecycle_configuration.state.rule[0].noncurrent_version_expiration[0].newer_noncurrent_versions == 10
+    error_message = "The newest old versions must be kept whatever their age, so a rarely applied stack keeps its rollback points."
+  }
 }
 
 run "retention_must_be_positive" {
@@ -88,4 +93,14 @@ run "retention_must_be_positive" {
   }
 
   expect_failures = [var.noncurrent_version_days]
+}
+
+run "project_must_be_a_valid_bucket_prefix" {
+  command = plan
+
+  variables {
+    project = "Itacatl_Prod"
+  }
+
+  expect_failures = [var.project]
 }
