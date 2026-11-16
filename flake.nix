@@ -11,6 +11,7 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
+        terraform = import ./nix/terraform.nix { inherit pkgs system; };
 
         # The project's tools. Add new ones here, e.g. with pkgs; [ nodejs python3 ]
         tools = with pkgs; [
@@ -18,6 +19,8 @@
           maven
           nodejs_22      # frontend build, lint and Prettier
           gh             # PRs and CI from the terminal; credential helper for git push
+          terraform      # infra/, HashiCorp's binary (nix/terraform.nix)
+          tflint         # Terraform linter
         ];
       in
       {
@@ -28,11 +31,15 @@
           # Versions come from the Nix packages, so the banner costs no process startups
           shellHook = ''
             echo ""
-            echo "🛠️  itacatl dev toolkit"
-            echo "   ☕ Java     ${pkgs.jdk21_headless.version}"
-            echo "   📦 Maven    ${pkgs.maven.version}"
-            echo "   🟢 Node.js  ${pkgs.nodejs_22.version}"
-            echo "   🐙 gh       ${pkgs.gh.version}"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            printf '  🛠️  \033[1mItacatl dev tools\033[0m\n'
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "   ☕ Java       ${pkgs.jdk21_headless.version}"
+            echo "   📦 Maven      ${pkgs.maven.version}"
+            echo "   🟢 Node.js    ${pkgs.nodejs_22.version}"
+            echo "   🐙 gh         ${pkgs.gh.version}"
+            echo "   🏗️  Terraform  ${terraform.version}"
+            echo "   🧹 TFLint     ${pkgs.tflint.version}"
             echo ""
           '';
         };
