@@ -1,0 +1,11 @@
+# Copied to backend.tf once the state bucket exists, to move this stack's state into it
+# (runbook in docs/terraform.md). The bucket name contains the account ID, so it is passed with
+# -backend-config instead of being written here.
+terraform {
+  backend "s3" {
+    key          = "bootstrap/terraform.tfstate"
+    region       = "us-east-1"
+    encrypt      = true
+    use_lockfile = true
+  }
+}
