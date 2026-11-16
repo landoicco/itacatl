@@ -4,6 +4,17 @@
 # Local environment; .env.example is the committed template
 .env
 
+# Terraform: providers, local state and per-deployment values stay out of the repository.
+# .terraform.lock.hcl is committed: it pins the providers' versions and checksums.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+!*.tfvars.example
+backend.hcl
+crash.log
+
 # GitHub PR and release descriptions, written locally and passed to gh
 pr-body.md
 release-desc-body.md

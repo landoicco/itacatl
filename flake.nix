@@ -10,7 +10,18 @@
   outputs = { self, nixpkgs, flake-utils }:
     flake-utils.lib.eachDefaultSystem (system:
       let
-        pkgs = nixpkgs.legacyPackages.${system};
+        pkgs = import nixpkgs {
+          inherit system;
+          # Terraform's license (BSL) is unfree; nothing else is allowed in by accident
+          config.allowUnfreePredicate = pkg: nixpkgs.lib.getName pkg == "terraform";
+        };
+        terraform = import ./nix/terraform.nix { inherit pkgs system; };
+
+        # What infra/ needs; also its own shell, so CI downloads only this
+        infraTools = [
+          terraform      # HashiCorp's binary (nix/terraform.nix)
+          pkgs.tflint    # Terraform linter
+        ];
 
         # The project's tools. Add new ones here, e.g. with pkgs; [ nodejs python3 ]
         tools = with pkgs; [
@@ -18,9 +29,14 @@
           maven
           nodejs_22      # frontend build, lint and Prettier
           gh             # PRs and CI from the terminal; credential helper for git push
-        ];
+        ] ++ infraTools;
       in
       {
+        # nix develop .#infra (the Terraform job in CI)
+        devShells.infra = pkgs.mkShell {
+          packages = infraTools;
+        };
+
         # nix develop
         devShells.default = pkgs.mkShell {
           packages = tools;
@@ -28,11 +44,15 @@
           # Versions come from the Nix packages, so the banner costs no process startups
           shellHook = ''
             echo ""
-            echo "🛠️  itacatl dev toolkit"
-            echo "   ☕ Java     ${pkgs.jdk21_headless.version}"
-            echo "   📦 Maven    ${pkgs.maven.version}"
-            echo "   🟢 Node.js  ${pkgs.nodejs_22.version}"
-            echo "   🐙 gh       ${pkgs.gh.version}"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            printf '  🛠️  \033[1mItacatl dev tools\033[0m\n'
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "   ☕ Java       ${pkgs.jdk21_headless.version}"
+            echo "   📦 Maven      ${pkgs.maven.version}"
+            echo "   🟢 Node.js    ${pkgs.nodejs_22.version}"
+            echo "   🐙 gh         ${pkgs.gh.version}"
+            echo "   🏗️  Terraform  ${terraform.version}"
+            echo "   🧹 TFLint     ${pkgs.tflint.version}"
             echo ""
           '';
         };

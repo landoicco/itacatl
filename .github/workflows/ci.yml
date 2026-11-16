@@ -56,6 +56,25 @@ jobs:
       - run: npm test -- --run
       - run: npm run build
 
+  terraform:
+    # Terraform and TFLint come from the flake's infra shell, so CI runs the exact versions of
+    # the dev shell. No AWS credentials: every check runs offline, tests against a mocked provider
+    name: Terraform
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Installs Nix only; packages come from the public cache.nixos.org
+      - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
+      - run: nix develop .#infra -c terraform -chdir=infra fmt -check -recursive
+      - run: nix develop .#infra -c tflint --chdir=infra --recursive
+      # One block per stack
+      - name: bootstrap
+        run: |
+          nix develop .#infra -c terraform -chdir=infra/bootstrap init -backend=false -input=false
+          nix develop .#infra -c terraform -chdir=infra/bootstrap validate
+          nix develop .#infra -c terraform -chdir=infra/bootstrap test
+
   images:
     # Catches Dockerfile problems that the build tools alone do not see
     name: Docker images
