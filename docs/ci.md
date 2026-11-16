@@ -1,6 +1,6 @@
 # CI and repository safeguards
 
-What every change goes through before it reaches `main`: the CI workflow, the ruleset that requires it, and how dependencies are kept up to date. Infrastructure checks join in Phase 3 of the [infra plan](infra-plan.md#phase-3-ci); until then they run locally ([Terraform guide](terraform.md#checks-without-aws)).
+What every change goes through before it reaches `main`: the CI workflow, the ruleset that requires it, and how dependencies are kept up to date.
 
 ## CI
 
@@ -10,9 +10,12 @@ What every change goes through before it reaches `main`: the CI workflow, the ru
 |---|---|
 | `Backend` | `mvn verify`: Spotless, compilation, tests (Flyway migrations on PostgreSQL via Testcontainers) |
 | `Frontend` | `npm ci`, Prettier, ESLint, Vitest, build |
+| `Terraform` | `fmt`, TFLint, and for each stack `init -backend=false`, `validate` and `test` against a mocked AWS provider ([Terraform guide](terraform.md#checks-without-aws)) |
 | `Docker images` | Both Dockerfiles build |
 
 The workflow has read-only permissions and actions are pinned to a commit SHA.
+
+The `Terraform` job takes its tools from the flake instead of setup actions: `cachix/install-nix-action` installs Nix, and `nix develop .#infra` provides the exact Terraform and TFLint of the dev shell, so a version is never pinned twice. The `infra` shell holds only those two, so the job downloads tens of megabytes rather than the whole toolchain. It never gets AWS credentials.
 
 ## Ruleset on `main`
 
@@ -20,7 +23,7 @@ Configured in GitHub under *Settings → Rules → Rulesets*:
 
 - Restrict deletions and block force pushes.
 - Require a pull request before merging, with conversation resolution. Required approvals stay at 0: with a single maintainer, 1 would block every merge.
-- Require the status checks `Backend`, `Frontend` and `Docker images`, and require branches to be up to date before merging.
+- Require the status checks `Backend`, `Frontend`, `Terraform` and `Docker images`, and require branches to be up to date before merging.
 - No bypass list, so the rules apply to the maintainer too.
 
 **Repository security settings** (free for public repositories): secret scanning with push protection, and Dependabot alerts.

@@ -122,8 +122,9 @@ Phases 1 to 3 need no AWS account: each tool joins the Nix shell in the phase th
 **Done when:** `envs/prod` passes the same checks, `trivy` finds nothing unaccepted, and an Infracost estimate stays within the table above.
 
 ### Phase 3: CI
-- [ ] Add `infracost` to `flake.nix` (free API key, kept out of the repository)
-- [ ] `fmt`, `validate`, `tflint`, `trivy`, `terraform test` and Infracost on PRs, with no AWS credentials
+- [x] `fmt`, `tflint`, `validate` and `terraform test` on PRs, with no AWS credentials, through the flake's `infra` shell (brought forward to Phase 1)
+- [ ] `trivy` on PRs
+- [ ] Add `infracost` to `flake.nix` (free API key, kept out of the repository) and run it on PRs
 
 ### Phase 4: Ephemeral deploy and evidence
 - [ ] Add `awscli2` to `flake.nix`; apply the bootstrap and migrate its state ([runbook](terraform.md#first-deploy))
