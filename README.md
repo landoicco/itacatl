@@ -39,7 +39,7 @@ A work in progress, built in the open.
 | Tenant isolation: Hibernate tenant filter | ✅ Done |
 | Tenant isolation: PostgreSQL Row-Level Security | ✅ Done |
 | Reservations and payments ([roadmap](docs/product-spec.md#rework-roadmap)) | 📋 Planned |
-| Terraform: bootstrap, modules, CI/CD | 📋 Planned |
+| Terraform: bootstrap, modules, CI | 🚧 In progress |
 | Ephemeral AWS deploy with load test and recovery evidence | 📋 Planned |
 
 ## Try it
@@ -138,7 +138,8 @@ Layers, patterns and the rules that keep them: [architecture guide](docs/archite
 **Delivery**
 - **One image, every environment:** Spring profiles change configuration only; the `aws` profile logs ECS JSON for CloudWatch.
 - **Guarded `main`:** CI (format, lint, tests, image builds) is required by a ruleset; actions are pinned to commit SHAs, and Dependabot sends grouped weekly updates ([CI and safeguards](docs/ci.md)).
-- **Reproducible toolchain:** JDK, Maven and Node are pinned in a Nix flake.
+- **Reproducible toolchain:** JDK, Maven, Node and Terraform are pinned in a Nix flake; Terraform is HashiCorp's own binary, checked against its published SHA-256.
+- **Infrastructure tested without a cloud account:** Terraform's tests run against a mocked AWS provider, so the infrastructure is checked on every change and deployed only on purpose ([Terraform guide](docs/terraform.md)).
 
 ## Stack
 
@@ -179,7 +180,7 @@ The management API, under `/api/manage/businesses/{slug}`, is for members of tha
 
 ## Development
 
-The toolchain (JDK, Maven, Node) is pinned in `flake.nix`. Run `nix develop` to enter it.
+The toolchain (JDK, Maven, Node, Terraform) is pinned in `flake.nix`. Run `nix develop` to enter it.
 
 AI assistants are optional and not part of the toolchain. Those that read [`AGENTS.md`](AGENTS.md) get the project's conventions and working rules; `CLAUDE.md` imports it for Claude Code.
 
@@ -224,6 +225,7 @@ gh release create v0.1.0 --title "v0.1.0" --notes-file release-desc-body.md
 | [i18n guide](docs/i18n.md) | How translations are wired in, dates and times, safety nets |
 | [CI and safeguards](docs/ci.md) | CI jobs, the ruleset on `main`, Dependabot and runtime upgrades |
 | [Infra plan](docs/infra-plan.md) | AWS architecture, cost rules, work phases |
+| [Terraform](docs/terraform.md) | Stacks, remote state, checks and tests without AWS, first-deploy runbook |
 | [ADRs](docs/adr/) | Architecture decisions and their trade-offs |
 
 ## Layout
@@ -231,6 +233,8 @@ gh release create v0.1.0 --title "v0.1.0" --notes-file release-desc-body.md
 ```
 backend/    Spring Boot API
 frontend/   React app
+infra/      Terraform for AWS (not deployed)
+nix/        packages the dev shell defines itself
 docs/       guides, product spec, infra plan, ADRs (docs/adr/)
 docker/     init scripts for the local containers
 ```

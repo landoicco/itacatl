@@ -4,7 +4,7 @@
 
 Make the application deployable to AWS with Terraform in a single environment, `prod`, built to be as cheap as possible. The target customers are small businesses, so the platform has to run at a cost that a marketplace of modest *fondas* can carry.
 
-The infrastructure is **deploy-ready but kept off**: it is validated on every PR (plan, policy checks, cost estimate) and applied only ephemerally to capture evidence, then destroyed. The design is recorded in [ADR 0002](adr/0002-low-cost-production-architecture.md).
+The infrastructure is **deploy-ready but kept off**: it is checked on every PR without access to AWS (format, lint, security scan, tests against a mocked provider, cost estimate), and applied by the maintainer from their machine only to capture evidence, then destroyed. CI never gets AWS credentials. The design is recorded in [ADR 0002](adr/0002-low-cost-production-architecture.md); how the code is written, checked and deployed, in the [Terraform guide](terraform.md).
 
 The same application image runs locally and in AWS; only configuration changes. Product scope lives in [product-spec.md](product-spec.md).
 
@@ -50,7 +50,7 @@ flowchart LR
 | No interface VPC endpoints | ~$7/month each |
 | Spot for compute | About a third of the on-demand price |
 | Short log retention | 14 days |
-| AWS Budgets with alerts | Catches anything left running after an ephemeral apply |
+| AWS Budgets with alerts | Catches anything left running after an ephemeral apply. Configured on the account, outside this repository |
 
 ### Estimated monthly cost if left running
 
@@ -72,7 +72,7 @@ WhatsApp messages are billed by Meta per conversation and are capped by the limi
 
 ```
 infra/
-├── bootstrap/          # state bucket, GitHub OIDC, CI roles, Budgets
+├── bootstrap/          # state bucket
 ├── modules/
 │   ├── network/        # VPC, public and private subnets, no NAT
 │   ├── frontend/       # S3 + CloudFront + OAC + ACM
@@ -87,6 +87,7 @@ infra/
 
 - State in S3 with `use_lockfile`.
 - `default_tags` on the provider: `Project`, `Env`, `ManagedBy`.
+- Every stack and module has `terraform test` files that run against a mocked AWS provider.
 
 ## Work phases
 
@@ -99,29 +100,33 @@ The product rework ([roadmap in the product spec](product-spec.md#rework-roadmap
 - [x] Replace `System.out.println` with SLF4J and align on Java 21
 - [x] Non-root user in the Dockerfiles; memory limits (JVM and PostgreSQL)
 - [x] Frontend: relative API path `/api`
-- [x] Rename the project to `itacatl` in a rename-only PR (Java package, Maven, compose, docs), then rename the GitHub repository. It must land before Phase 1, because the GitHub OIDC trust policy contains the repository name.
+- [x] Rename the project to `itacatl` in a rename-only PR (Java package, Maven, compose, docs), then rename the GitHub repository.
 
 **Done when:** `docker compose up` works as before and the project is named `itacatl`.
 
-### Phase 1: Bootstrap
-- [ ] Add to `flake.nix`: `terraform`, `awscli2`, `tflint`, `trivy`, `terraform-docs`, `infracost`
-- [ ] `bootstrap/`: state bucket, OIDC, plan and apply roles, Budgets and SNS
-- [ ] Migrate the bootstrap state to S3
+Phases 1 to 3 need no AWS account: each tool joins the Nix shell in the phase that first uses it.
 
-**Done when:** remote state exists and Budgets alerts arrive.
+### Phase 1: Bootstrap
+- [x] Add to `flake.nix`: `terraform` (HashiCorp's binary) and `tflint`
+- [x] `bootstrap/`: the state bucket, with tests against a mocked provider
+- [x] [Terraform guide](terraform.md), with the first-deploy runbook
+
+**Done when:** the bootstrap passes `fmt`, `validate`, `tflint` and its tests without AWS credentials.
 
 ### Phase 2: Modules
-- [ ] `network`, `database`, `backend`, `frontend`, `notifications` and `observability` modules
+- [ ] Add `trivy` and `terraform-docs` to `flake.nix`
+- [ ] `network`, `database`, `backend`, `frontend`, `notifications` and `observability` modules, each with tests
 - [ ] `envs/prod` wiring them together
+- [ ] The runbook's remaining steps: applying `envs/prod` and pushing the backend image to ECR
 
-**Done when:** `terraform plan` for `envs/prod` is clean and Infracost stays within the estimate above.
+**Done when:** `envs/prod` passes the same checks, `trivy` finds nothing unaccepted, and an Infracost estimate stays within the table above.
 
-### Phase 3: CI/CD
-- [ ] `fmt`, `validate`, `tflint`, `trivy` and `terraform test` on PRs
-- [ ] `plan` and Infracost comment on PRs
-- [ ] Manual `apply` and `destroy` workflows with environment approval; `apply` builds and pushes the image to ECR
+### Phase 3: CI
+- [ ] Add `infracost` to `flake.nix` (free API key, kept out of the repository)
+- [ ] `fmt`, `validate`, `tflint`, `trivy`, `terraform test` and Infracost on PRs, with no AWS credentials
 
 ### Phase 4: Ephemeral deploy and evidence
+- [ ] Add `awscli2` to `flake.nix`; apply the bootstrap and migrate its state ([runbook](terraform.md#first-deploy))
 - [ ] Apply, seed sample data and run a smoke test
 - [ ] Load test with k6 and capture the dashboard
 - [ ] Simulate a spot interruption and measure recovery

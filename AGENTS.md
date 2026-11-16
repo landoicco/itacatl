@@ -18,6 +18,8 @@ The goal is learning: every technical choice should be one the maintainer can de
 - `backend/`: Spring Boot 4 (Java 21), Maven, Flyway, JPA. Package root `dev.licaza.itacatl`.
 - `frontend/`: React 19, TypeScript, Vite, Tailwind, Vitest.
 - `docker-compose.yml` + `.env` (git-ignored, copied from `.env.example`): local full stack (database, backend, frontend). `docker/` holds the containers' init scripts.
+- `infra/`: Terraform for AWS, one directory per stack (`bootstrap/` first). Ready but not deployed. See `docs/terraform.md`.
+- `nix/`: packages the flake defines itself (`terraform.nix`).
 - `docs/`: specs, plans, and ADRs in `docs/adr/`.
 
 ## Environment
@@ -28,7 +30,7 @@ The toolchain is defined in `flake.nix` and entered with `nix develop`. It holds
 - Prefer packages from `nixpkgs`. Look a name up with `nix search nixpkgs <name>` before adding it.
 - After changing `flake.nix`, the shell must be re-entered (`exit`, then `nix develop`) for the tool to appear; tell the developer when that is needed.
 - `flake.lock` pins the versions: commit it together with `flake.nix`.
-- Start the assistant from inside `nix develop`, so the commands below find the pinned JDK, Maven and Node.
+- Start the assistant from inside `nix develop`, so the commands below find the pinned JDK, Maven, Node and Terraform.
 
 ## Commands
 
@@ -43,9 +45,15 @@ Frontend (from `frontend/`, run `npm ci` first):
 - `npm run lint`, `npm run build`, `npm test -- --run`.
 - `npm run format`: Prettier.
 
+Infrastructure (from `infra/`), none of which needs AWS credentials:
+
+- `terraform -chdir=<stack> init -backend=false`, then `validate` and `test` (mocked AWS provider).
+- `terraform fmt -recursive`, `tflint --recursive`.
+- Never `plan`, `apply` or `destroy`: they need AWS, and the maintainer runs them.
+
 Full stack: `docker compose up --build`, app at `http://localhost:3000`.
 
-Format every file you edit (`mvn spotless:apply`, `npm run format`) before handing the change over; CI fails on unformatted code.
+Format every file you edit (`mvn spotless:apply`, `npm run format`, `terraform fmt`) before handing the change over; CI fails on unformatted code.
 
 ## Conventions
 

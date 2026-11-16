@@ -1,6 +1,6 @@
 # CI and repository safeguards
 
-What every change goes through before it reaches `main`: the CI workflow, the ruleset that requires it, and how dependencies are kept up to date. Infrastructure checks join in the Terraform phases of the [infra plan](infra-plan.md#phase-3-cicd).
+What every change goes through before it reaches `main`: the CI workflow, the ruleset that requires it, and how dependencies are kept up to date. Infrastructure checks join in Phase 3 of the [infra plan](infra-plan.md#phase-3-ci); until then they run locally ([Terraform guide](terraform.md#checks-without-aws)).
 
 ## CI
 
