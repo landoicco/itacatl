@@ -91,6 +91,11 @@ jobs:
           terraform -chdir=infra/modules/network init -backend=false -input=false
           terraform -chdir=infra/modules/network validate
           terraform -chdir=infra/modules/network test
+      - name: modules/database
+        run: |
+          terraform -chdir=infra/modules/database init -backend=false -input=false
+          terraform -chdir=infra/modules/database validate
+          terraform -chdir=infra/modules/database test
       - name: envs/prod
         run: |
           terraform -chdir=infra/envs/prod init -backend=false -input=false
