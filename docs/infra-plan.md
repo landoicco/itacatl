@@ -91,6 +91,28 @@ infra/
 - `default_tags` on the provider: `Project`, `Env`, `ManagedBy`.
 - Every stack and module has `terraform test` files that run against a mocked AWS provider.
 
+## Definition of done
+
+The infrastructure is finished when it is **deploy-ready**: on the day the maintainer decides to launch, the runbook is followed from start to end without designing or writing anything new. Nothing of this project exists in the AWS account before that day, not even the state bucket or a read-only `plan`, so every check below runs without AWS. Small fixes that only a first apply can reveal are accepted after launch: a missing IAM permission, user data details, alarm thresholds, JVM memory, an instance type without spot capacity.
+
+### Each module PR
+
+1. CI passes `fmt`, `tflint`, `validate`, `terraform-docs` and the mocked tests; from the `backend` module on, `trivy` finds nothing that was not accepted on purpose.
+2. The module joins `envs/prod`, and the stack's tests check how it is wired to the others.
+3. Its cost fits the [estimate](#estimated-monthly-cost-if-left-running).
+4. Docs: the module's README, the tests table of the [Terraform guide](terraform.md), its step in the runbook, and what to check about it on the first apply, such as values a mock cannot verify against AWS (instance types, engine versions).
+5. The status page is updated.
+
+### Deploy-ready
+
+1. **Complete:** every module except `notifications` is in `envs/prod`. Only a written list of account prerequisites is created by hand: the hosted zone, AWS Budgets and the maintainer's sign-in.
+2. **Checked without AWS:** everything above, plus an Infracost estimate within the $30 ceiling in CI.
+3. **The application is ready for AWS:** the `aws` profile is complete (database access through IAM, configuration from SSM and Secrets Manager, ECS JSON logs), and the backend image builds for arm64, the architecture of the Graviton instances.
+4. **The runbook goes end to end:** from an empty account to a running app with a smoke test, and back to nothing with a destroy, with exact commands. It covers destroying a database under deletion protection and what happens to its final snapshot, and gathers the first-apply checks of every module.
+5. **No open decision blocks it:** each one in the [list below](#open-decisions) is settled or deferred on purpose with its known limitation.
+
+The deploy itself and its evidence are Phase 4, outside this definition.
+
 ## Work phases
 
 The product rework ([roadmap in the product spec](product-spec.md#rework-roadmap)) runs after Phase 0 and before Phase 4, so the deployment evidence comes from the real domain.
@@ -124,15 +146,19 @@ One PR per module, in this order; each joins `envs/prod` in the same PR, so the 
 - [ ] `backend` module; add `trivy` to `flake.nix`, now that there are resources worth scanning
 - [ ] `frontend` module
 - [ ] `observability` module
-- [ ] The runbook's remaining steps: applying `envs/prod` and pushing the backend image to ECR
+- [ ] The application's `aws` profile: database access through IAM, configuration from SSM and Secrets Manager
+- [ ] The runbook's remaining steps: applying `envs/prod`, pushing the backend image to ECR, a smoke test, the destroy, and the first-apply checks
 - [ ] `notifications` module, postponed until slices 5 and 6 need it
 
-**Done when:** `envs/prod` passes the same checks, `trivy` finds nothing unaccepted, and an Infracost estimate stays within the table above.
+**Done when:** each module PR meets the [definition of done](#each-module-pr).
 
 ### Phase 3: CI
 - [x] `fmt`, `tflint`, `validate` and `terraform test` on PRs, with no AWS credentials, through the flake's `infra` shell (brought forward to Phase 1)
 - [ ] `trivy` on PRs
 - [ ] Add `infracost` to `flake.nix` (free API key, kept out of the repository) and run it on PRs
+- [ ] Build the backend image for arm64 too
+
+**Done when:** the infrastructure is [deploy-ready](#deploy-ready).
 
 ### Phase 4: Ephemeral deploy and evidence
 - [ ] Add `awscli2` to `flake.nix`; apply the bootstrap and migrate its state ([runbook](terraform.md#first-deploy))
