@@ -57,6 +57,21 @@ run "the_backend_is_in_the_public_subnets" {
   }
 }
 
+# Applied against the mock, because the Elastic IP's DNS name is unknown in a plan.
+run "cloudfront_sends_the_api_to_the_backends_address" {
+  command = apply
+
+  assert {
+    condition     = module.frontend.api_origin_domain_name == module.backend.origin_domain_name
+    error_message = "CloudFront's /api origin must be the backend's Elastic IP."
+  }
+
+  assert {
+    condition     = module.frontend.url == "https://${module.frontend.distribution_domain_name}"
+    error_message = "Without a domain, prod must be served on CloudFront's own."
+  }
+}
+
 run "an_invalid_project_name_is_rejected" {
   command = plan
 

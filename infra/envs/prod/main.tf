@@ -31,3 +31,10 @@ module "backend" {
   database_resource_id            = module.database.resource_id
   database_master_user_secret_arn = module.database.master_user_secret_arn
 }
+
+module "frontend" {
+  source                     = "../../modules/frontend"
+  name                       = local.name
+  backend_origin_domain_name = module.backend.origin_domain_name
+  domain                     = var.domain
+}

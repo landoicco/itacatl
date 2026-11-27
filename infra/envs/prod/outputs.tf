@@ -32,3 +32,18 @@ output "backend_origin_domain_name" {
   description = "DNS name of the backend's Elastic IP, CloudFront's origin."
   value       = module.backend.origin_domain_name
 }
+
+output "frontend_bucket_name" {
+  description = "S3 bucket the frontend's build is uploaded to."
+  value       = module.frontend.bucket_name
+}
+
+output "frontend_distribution_id" {
+  description = "CloudFront distribution a frontend deploy invalidates."
+  value       = module.frontend.distribution_id
+}
+
+output "url" {
+  description = "Address the marketplace is served on."
+  value       = module.frontend.url
+}
