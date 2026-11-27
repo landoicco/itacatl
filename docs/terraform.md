@@ -151,10 +151,10 @@ The database refuses to be deleted, so a destroy takes two steps, from `infra/en
 
 ```shell
 terraform apply -var database_deletion_protection=false   # only lifts the protection
-terraform destroy -var database_deletion_protection=false
+terraform destroy
 ```
 
-Pass the same variable to `destroy`, or Terraform would plan to turn the protection back on first. RDS then takes a final snapshot, named `itacatl-prod-final-<random suffix>`, and deletes the instance; its automated backups go with it. The snapshot stays, billed by the size of the data (cents for a small database), and the next database never restores from it on its own. List and delete old ones when they are no longer needed:
+The apply is needed because the protection is enforced by AWS, not by Terraform: a destroy only plans deletions, and RDS refuses to delete an instance that still has it on. Once the apply has turned it off, the destroy goes through. RDS then takes a final snapshot, named `itacatl-prod-final-<random suffix>`, and deletes the instance; its automated backups go with it. The snapshot stays, billed by the size of the data (cents for a small database), and the next database never restores from it on its own. List and delete old ones when they are no longer needed:
 
 ```shell
 aws rds describe-db-snapshots --snapshot-type manual --query 'DBSnapshots[].DBSnapshotIdentifier'

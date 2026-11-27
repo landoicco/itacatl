@@ -5,7 +5,7 @@ The marketplace's PostgreSQL on RDS: one single-AZ instance in the private subne
 - **Reachable from nothing yet.** Its security group has no rules: the backend module adds one ingress rule for its own security group. The database starts no connections, so it has no egress either.
 - **No password goes through Terraform.** RDS creates the master password in Secrets Manager and rotates it; Flyway reads it there to migrate as the tables' owner. The application signs in as `itacatl_app` with an IAM token, which the backend creates before migrating ([how the role is created](../../../docs/tenant-isolation.md#how-the-role-is-created)).
 - **TLS is required** (`rds.force_ssl`), so neither the tokens nor the master password travel unencrypted.
-- **The data survives mistakes:** encrypted storage with AWS's own key (no monthly charge), seven days of automated backups, deletion protection, and a final snapshot on destroy. The snapshot's name has a random suffix, because snapshot names are unique in the account and each destroy leaves one behind.
+- **The data survives mistakes:** encrypted storage with AWS's own key (no monthly charge), seven days of automated backups, deletion protection, and a final snapshot on destroy. The snapshot's name has a random suffix, because snapshot names are unique in the account and each destroy leaves one behind; the suffix also changes when a new identifier, database name or master user makes RDS replace the instance.
 - **Left out because they bill monthly:** a Multi-AZ standby, Enhanced Monitoring, a customer-managed KMS key, and storage autoscaling. Exporting logs to CloudWatch is decided with the observability module.
 
 Destroying it takes two steps, in the [runbook](../../../docs/terraform.md#destroying-prod).

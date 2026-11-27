@@ -5,9 +5,13 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 import org.flywaydb.core.api.callback.Callback;
 import org.flywaydb.core.api.callback.Context;
 import org.flywaydb.core.api.callback.Event;
+import org.postgresql.PGConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -32,8 +36,8 @@ public class AppRoleCallback implements Callback {
   public AppRoleCallback(
       // RDS only: the application signs in with a token from its IAM role instead of a password
       @Value("${itacatl.app-role.iam-authentication:false}") boolean iamAuthentication,
-      // The datasource's, so the role always has the password the application connects with
-      @Value("${spring.datasource.password:}") String password) {
+      // Read directly, not through spring.datasource.password, so with IAM it may be unset
+      @Value("${DB_APP_PASSWORD:}") String password) {
     this.iamAuthentication = iamAuthentication;
     this.password = password;
   }
@@ -43,9 +47,10 @@ public class AppRoleCallback implements Callback {
     return event == Event.BEFORE_MIGRATE;
   }
 
+  // Each statement commits at once, so an instance waiting on the lock sees the role once it has it
   @Override
   public boolean canHandleInTransaction(Event event, Context context) {
-    return true;
+    return false;
   }
 
   @Override
@@ -69,24 +74,47 @@ public class AppRoleCallback implements Callback {
           "Role " + role + " needs a password: set DB_APP_PASSWORD, or IAM authentication");
     }
 
-    Boolean bypassesPolicies = bypassesPolicies(connection, role);
-    if (bypassesPolicies == null) {
+    // Two instances starting at once, as during an instance refresh, would race on CREATE ROLE;
+    // the second waits here until the first is done
+    query(connection, "SELECT pg_advisory_lock(hashtext(?))", role);
+    try {
+      prepare(connection, role);
+    } finally {
+      query(connection, "SELECT pg_advisory_unlock(hashtext(?))", role);
+    }
+  }
+
+  private void prepare(Connection connection, String role) throws SQLException {
+    PGConnection postgres = connection.unwrap(PGConnection.class);
+    String quotedRole = postgres.escapeIdentifier(role);
+
+    Optional<List<String>> excess = excessPrivileges(connection, role);
+    if (excess.isEmpty()) {
       // Attributes are only set on creation: changing SUPERUSER or BYPASSRLS later needs a
       // superuser, which the RDS master user is not
       execute(
-          connection, "CREATE ROLE %I LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS", role);
+          connection,
+          "CREATE ROLE " + quotedRole + " LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS");
       log.info("✅ Created the database role {}", role);
-    } else if (bypassesPolicies) {
+    } else if (!excess.get().isEmpty()) {
       throw new IllegalStateException(
-          "Role " + role + " is a superuser or has BYPASSRLS: Row-Level Security would not apply");
+          "Role " + role + " must only sign in and use data, but it has " + excess.get());
     }
 
+    boolean signsInWithIam = isMember(connection, role, "rds_iam");
     if (iamAuthentication) {
       // rds_iam exists only in RDS. A role in it can only sign in with an IAM token
-      execute(connection, "GRANT rds_iam TO %I", role);
-      execute(connection, "ALTER ROLE %I PASSWORD NULL", role);
+      if (!signsInWithIam) {
+        execute(connection, "GRANT rds_iam TO " + quotedRole);
+      }
+      execute(connection, "ALTER ROLE " + quotedRole + " PASSWORD NULL");
     } else {
-      execute(connection, "ALTER ROLE %I PASSWORD %L", role, password);
+      // RDS would keep refusing passwords from a role that stays in rds_iam
+      if (signsInWithIam) {
+        execute(connection, "REVOKE rds_iam FROM " + quotedRole);
+      }
+      // Hashed here (SCRAM), so the password never reaches the server, or its logs, in plain text
+      postgres.alterUserPassword(role, password.toCharArray(), "scram-sha-256");
     }
     log.info(
         "✅ Database role {} ready, signing in with {}",
@@ -94,37 +122,69 @@ public class AppRoleCallback implements Callback {
         iamAuthentication ? "IAM" : "a password");
   }
 
-  // null when the role does not exist
-  private static Boolean bypassesPolicies(Connection connection, String role) throws SQLException {
+  /**
+   * What the role may do beyond signing in and using data: each item would let it escape the
+   * policies (SUPERUSER, BYPASSRLS, owning a table) or gain more than it needs. Empty when the role
+   * does not exist.
+   */
+  private static Optional<List<String>> excessPrivileges(Connection connection, String role)
+      throws SQLException {
     try (PreparedStatement query =
         connection.prepareStatement(
-            "SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = ?")) {
+            """
+            SELECT rolsuper, rolbypassrls, rolcreaterole, rolcreatedb,
+                   EXISTS (SELECT FROM pg_class WHERE relowner = r.oid)
+            FROM pg_roles r
+            WHERE rolname = ?
+            """)) {
       query.setString(1, role);
       try (ResultSet result = query.executeQuery()) {
-        return result.next() ? result.getBoolean(1) : null;
+        if (!result.next()) {
+          return Optional.empty();
+        }
+        List<String> excess = new ArrayList<>();
+        String[] names = {"SUPERUSER", "BYPASSRLS", "CREATEROLE", "CREATEDB", "tables it owns"};
+        for (int i = 0; i < names.length; i++) {
+          if (result.getBoolean(i + 1)) {
+            excess.add(names[i]);
+          }
+        }
+        return Optional.of(excess);
       }
     }
   }
 
-  /**
-   * Runs a statement that cannot take bind parameters, as role statements cannot. PostgreSQL's
-   * format() quotes each argument (%I as an identifier, %L as a literal), so a password with quotes
-   * or backslashes is never parsed as SQL.
-   */
-  private static void execute(Connection connection, String template, String... arguments)
+  // False also when the group does not exist, as rds_iam outside RDS
+  private static boolean isMember(Connection connection, String role, String group)
       throws SQLException {
-    String sql;
-    try (PreparedStatement format =
-        connection.prepareStatement("SELECT format(?" + ", ?".repeat(arguments.length) + ")")) {
-      format.setString(1, template);
-      for (int i = 0; i < arguments.length; i++) {
-        format.setString(i + 2, arguments[i]);
-      }
-      try (ResultSet result = format.executeQuery()) {
+    try (PreparedStatement query =
+        connection.prepareStatement(
+            """
+            SELECT EXISTS (
+                SELECT FROM pg_auth_members m
+                JOIN pg_roles g ON g.oid = m.roleid
+                JOIN pg_roles u ON u.oid = m.member
+                WHERE g.rolname = ? AND u.rolname = ?)
+            """)) {
+      query.setString(1, group);
+      query.setString(2, role);
+      try (ResultSet result = query.executeQuery()) {
         result.next();
-        sql = result.getString(1);
+        return result.getBoolean(1);
       }
     }
+  }
+
+  private static void query(Connection connection, String sql, String argument)
+      throws SQLException {
+    try (PreparedStatement statement = connection.prepareStatement(sql)) {
+      statement.setString(1, argument);
+      statement.executeQuery().close();
+    }
+  }
+
+  // Role statements take no bind parameters: the role is quoted by escapeIdentifier
+  private static void execute(Connection connection, String sql) throws SQLException {
     try (Statement statement = connection.createStatement()) {
       statement.execute(sql);
     }

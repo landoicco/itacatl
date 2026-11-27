@@ -48,7 +48,7 @@
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
-            <scope>runtime</scope>
+            <!-- Compile scope for PGConnection, which AppRoleCallback uses to hash the role's password -->
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>

@@ -41,9 +41,16 @@ resource "aws_db_parameter_group" "this" {
 }
 
 # Snapshot names are unique in the account, and a destroyed database leaves its final snapshot
-# behind: with a fixed name, the second destroy would fail. Each new database gets a new suffix.
+# behind: with a fixed name, the second destroy would fail. Each new database gets a new suffix:
+# a new stack, and a change to an attribute that makes RDS replace the instance (the keepers).
 resource "random_id" "final_snapshot" {
   byte_length = 4
+
+  keepers = {
+    identifier = var.name
+    db_name    = var.database_name
+    username   = var.master_username
+  }
 }
 
 resource "aws_db_instance" "this" {
