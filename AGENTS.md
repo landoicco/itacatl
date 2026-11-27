@@ -18,7 +18,7 @@ The goal is learning: every technical choice should be one the maintainer can de
 - `backend/`: Spring Boot 4 (Java 21), Maven, Flyway, JPA. Package root `dev.licaza.itacatl`.
 - `frontend/`: React 19, TypeScript, Vite, Tailwind, Vitest.
 - `docker-compose.yml` + `.env` (git-ignored, copied from `.env.example`): local full stack (database, backend, frontend). `docker/` holds the containers' init scripts.
-- `infra/`: Terraform for AWS, one directory per stack (`bootstrap/` first). Ready but not deployed. See `docs/terraform.md`.
+- `infra/`: Terraform for AWS: stacks (`bootstrap/` first, then `envs/prod/`) built from `modules/`. Ready but not deployed. See `docs/terraform.md`.
 - `nix/`: packages the flake defines itself (`terraform.nix`).
 - `docs/`: specs, plans, and ADRs in `docs/adr/`.
 
@@ -47,8 +47,9 @@ Frontend (from `frontend/`, run `npm ci` first):
 
 Infrastructure (from `infra/`), none of which needs AWS credentials:
 
-- `terraform -chdir=<stack> init -backend=false`, then `validate` and `test` (mocked AWS provider).
+- `terraform -chdir=<stack or module> init -backend=false`, then `validate` and `test` (mocked AWS provider).
 - `terraform fmt -recursive`, `tflint --recursive`.
+- `terraform-docs .`: regenerates the inputs and outputs tables in each module's README; run it after changing a module's variables or outputs.
 - Never `plan`, `apply` or `destroy`: they need AWS, and the maintainer runs them.
 
 Full stack: `docker compose up --build`, app at `http://localhost:3000`.

@@ -30,8 +30,8 @@ flowchart LR
     sqs -.-> dlq[(DLQ)]
 ```
 
-- **Backend:** an Auto Scaling group of one instance using a mixed instances policy with spot capacity (`price-capacity-optimized` across several Graviton types) and capacity rebalancing. The ASG replaces the instance when it is reclaimed or fails. A variable switches to on-demand. The instance runs the backend image with Docker; the database never runs on it.
-- **Database:** RDS PostgreSQL (PostGIS as an extension), smallest Graviton class, single-AZ, automated backups. The master password is managed by RDS in Secrets Manager. The master user owns the tables and runs Flyway; the backend connects as `itacatl_app`, a role subject to Row-Level Security, which must exist before the first migration ([tenant isolation](tenant-isolation.md#two-database-roles)). Its password is an SSM SecureString, which adds no cost.
+- **Backend:** an Auto Scaling group of one instance, spot only, using a mixed instances policy (`price-capacity-optimized` across several 2 GB Graviton types, such as `t4g.small`, `c6g.medium` and `c7g.medium`, in both zones) and capacity rebalancing. The ASG replaces the instance when it is reclaimed or fails. There is no on-demand fallback: listing several types and zones makes it rare for none of them to have spot capacity, and when that happens only the backend stops, while the database and its data are unaffected. 2 GB is the smallest size that fits the JVM, Docker and the SSM agent; a 1 GB `t4g.micro` would save about $2/month at the cost of out-of-memory restarts. The instance runs the backend image with Docker; the database never runs on it.
+- **Database:** RDS PostgreSQL (PostGIS as an extension), smallest Graviton class, single-AZ. It is the one component kept whole: automated backups, encrypted storage, deletion protection and a final snapshot when it is destroyed, since the data is the only thing the ASG cannot rebuild. The master password is managed by RDS in Secrets Manager. The master user owns the tables and runs Flyway; the backend connects as `itacatl_app`, a role subject to Row-Level Security, which must exist before the first migration ([tenant isolation](tenant-isolation.md#two-database-roles)). Its password is an SSM SecureString, which adds no cost.
 - **Frontend:** static build in S3, served by CloudFront. Same origin for the app and `/api`, so no CORS in AWS.
 - **Notifications:** the backend publishes to SQS; a Lambda outside the VPC sends the WhatsApp messages. Reservations stay synchronous, because they must check stock before confirming.
 - **Images:** ECR with a lifecycle policy that keeps the last few tags.
@@ -44,27 +44,29 @@ flowchart LR
 
 | Rule | Why |
 |---|---|
-| No NAT gateway | ~$33/month on its own. The EC2 instance sits in a public subnet with a security group that only allows the CloudFront prefix list; RDS needs no internet access |
+| **At most $30/month when running** | A hard ceiling for the whole marketplace, not a budget to fill: what a group of small businesses can carry together. The design aims for the cheapest option that stays robust. Pay per use only, with no reservations or savings plans, so destroying the environment brings the bill to cents. Any change that would push the estimate past it is redesigned, not accepted |
+| Savings never come from the database | The database holds the only state that cannot be rebuilt, so its backups, encryption, deletion protection and final snapshot are never traded for cost. Compute is where the savings come from |
+| No NAT gateway | ~$33/month on its own. The EC2 instance sits in a public subnet with a security group that only allows the CloudFront prefix list; RDS needs no internet access. For the same reason the instance does not move to a private subnet behind CloudFront VPC origins: it would then need a NAT gateway or interface endpoints to reach ECR and SSM |
 | No load balancer | ~$17/month. CloudFront terminates TLS and reaches the instance directly |
 | No Multi-AZ by default | Doubles the database cost. The ASG and RDS backups cover the failures a small marketplace can tolerate |
 | No interface VPC endpoints | ~$7/month each |
-| Spot for compute | About a third of the on-demand price |
+| Spot only for compute | About a third of the on-demand price. No on-demand fallback; several instance types and zones keep interruptions short |
 | Short log retention | 14 days |
 | AWS Budgets with alerts | Catches anything left running after an ephemeral apply. Configured on the account, outside this repository |
 
 ### Estimated monthly cost if left running
 
-Approximate on-demand prices in `us-east-1`, before Infracost validates them:
+Approximate prices in `us-east-1` (spot for EC2, on-demand for the rest), before Infracost validates them. Spot prices move, so the ceiling leaves room above the estimate:
 
 | Item | USD/month |
 |---|---|
-| EC2 `t4g.small` spot + EBS | ~6 |
+| EC2 2 GB Graviton spot (`t4g.small` or similar) + 8 GB EBS | ~5 |
 | Public IPv4 address | ~4 |
 | RDS `db.t4g.micro` single-AZ + 20 GB | ~14 |
-| Secrets Manager (database password) | ~0.40 |
+| Secrets Manager (database master password) | ~0.40 |
 | S3, CloudFront, ECR, SQS, Lambda | ~1 |
 | CloudWatch | ~1–3 |
-| **Total** | **~25** |
+| **Total** | **~25–27** |
 
 WhatsApp messages are billed by Meta per conversation and are capped by the limits in the product spec.
 
@@ -114,10 +116,16 @@ Phases 1 to 3 need no AWS account: each tool joins the Nix shell in the phase th
 **Done when:** the bootstrap passes `fmt`, `validate`, `tflint` and its tests without AWS credentials.
 
 ### Phase 2: Modules
-- [ ] Add `trivy` and `terraform-docs` to `flake.nix`
-- [ ] `network`, `database`, `backend`, `frontend`, `notifications` and `observability` modules, each with tests
-- [ ] `envs/prod` wiring them together
+One PR per module, in this order; each joins `envs/prod` in the same PR, so the stack can always be planned as a whole.
+
+- [x] Add `terraform-docs` to `flake.nix`, with a plugin cache shared by every directory
+- [x] `network` module, and `envs/prod` wiring it
+- [ ] `database` module
+- [ ] `backend` module; add `trivy` to `flake.nix`, now that there are resources worth scanning
+- [ ] `frontend` module
+- [ ] `observability` module
 - [ ] The runbook's remaining steps: applying `envs/prod` and pushing the backend image to ECR
+- [ ] `notifications` module, postponed until slices 5 and 6 need it
 
 **Done when:** `envs/prod` passes the same checks, `trivy` finds nothing unaccepted, and an Infracost estimate stays within the table above.
 
@@ -141,5 +149,4 @@ Phases 1 to 3 need no AWS account: each tool joins the Nix shell in the phase th
 
 - Production domain.
 - CloudFront flat-rate free plan (includes WAF) if compatible with an EC2 origin; otherwise rate limiting in Spring with Bucket4j.
-- CloudFront VPC origins, which would move the instance to a private subnet and drop the public IPv4 cost, at the price of needing another way out to the internet.
 - How `itacatl_app` is created in RDS. The Terraform PostgreSQL provider needs network access to the database, which is not public; the alternatives are a one-time step through SSM Session Manager on the instance, or the backend creating it at startup with the master credentials before Flyway runs.

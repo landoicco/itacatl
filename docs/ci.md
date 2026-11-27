@@ -10,7 +10,7 @@ What every change goes through before it reaches `main`: the CI workflow, the ru
 |---|---|
 | `Backend` | `mvn verify`: Spotless, compilation, tests (Flyway migrations on PostgreSQL via Testcontainers) |
 | `Frontend` | `npm ci`, Prettier, ESLint, Vitest, build |
-| `Terraform` | `fmt`, TFLint, and for each stack `init -backend=false`, `validate` and `test` against a mocked AWS provider ([Terraform guide](terraform.md#checks-without-aws)) |
+| `Terraform` | `fmt`, TFLint, terraform-docs, and for each stack and module `init -backend=false`, `validate` and `test` against a mocked AWS provider ([Terraform guide](terraform.md#checks-without-aws)) |
 | `Docker images` | Both Dockerfiles build |
 
 The workflow has read-only permissions and actions are pinned to a commit SHA.
@@ -23,7 +23,7 @@ The `Backend`, `Frontend` and `Terraform` jobs take their tools from the flake i
 |---|---|---|
 | `.#backend` | JDK 21, Maven | `Backend` |
 | `.#frontend` | Node.js 22 | `Frontend` |
-| `.#infra` | Terraform, TFLint | `Terraform` |
+| `.#infra` | Terraform, TFLint, terraform-docs | `Terraform` |
 
 **Why:** `flake.lock` already pins every tool for the dev shell. Setup actions would pin them a second time in the workflow, and the two copies drift apart: CI would test with a JDK or Node patch the developers don't use. With the flake, "it passes in `nix develop`" means it passes in CI.
 

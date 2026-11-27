@@ -8,19 +8,33 @@ The infrastructure is **ready but off**: the code is complete and checked by CI 
 
 ```
 infra/
-├── .tflint.hcl         # lint rules for every stack
-└── bootstrap/          # the state bucket, applied once by hand
-    ├── state.tf
-    ├── backend.tf.example  # backend block, once the bucket exists
-    ├── backend.hcl.example # bucket and region, kept out of git
-    └── tests/          # terraform test, against a mocked provider
+├── .tflint.hcl         # lint rules for every directory
+├── .terraform-docs.yml # how each module's README tables are generated
+├── bootstrap/          # stack: the state bucket, applied once by hand
+│   ├── state.tf
+│   ├── backend.tf.example  # backend block, once the bucket exists
+│   ├── backend.hcl.example # bucket and region, kept out of git
+│   └── tests/          # terraform test, against a mocked provider
+├── modules/            # building blocks, no state of their own
+│   └── network/        # VPC, subnets, routes
+│       ├── README.md   # what it is for, plus generated inputs and outputs
+│       └── tests/
+└── envs/
+    └── prod/           # stack: every module wired together
+        ├── main.tf
+        ├── backend.hcl.example
+        └── tests/
 ```
 
-Each directory under `infra/` with its own state is a **stack**. `bootstrap` comes first and is separate because it creates the bucket that holds every stack's state, its own included.
+Each directory with its own state is a **stack**. `bootstrap` comes first and is separate because it creates the bucket that holds every stack's state, its own included. `envs/prod` is the application's environment: it holds no resources of its own, only the modules and the values that join them (the network's subnets passed to the database, for instance).
+
+A **module** is a reusable piece with inputs and outputs and no state; a stack instantiates it. The modules join `envs/prod` one per PR, in the order of the [infra plan](infra-plan.md#phase-2-modules), so the stack always plans as a whole.
 
 ## The toolchain
 
-Terraform and TFLint come from the [Nix flake](../flake.nix): the default shell (`nix develop`) has them with the rest of the toolchain, and the `infra` shell (`nix develop .#infra`) has only them, for CI.
+Terraform, TFLint and terraform-docs come from the [Nix flake](../flake.nix): the default shell (`nix develop`) has them with the rest of the toolchain, and the `infra` shell (`nix develop .#infra`) has only them, for CI.
+
+- **One copy of the AWS provider.** Every directory that runs `init` (each stack and each module, for its tests) would download its own copy of the AWS provider, about 770 MB unpacked: six modules and two stacks would take 6 GB of identical files. Both shells set `TF_PLUGIN_CACHE_DIR` to `~/.cache/terraform/plugins`, so the provider is downloaded once and each `.terraform/` only links to it. The lock files still check its checksums, so the cache cannot slip in a different binary. In CI the job downloads the provider once instead of once per directory. Two caveats: a `.terraform/` initialized before the cache existed keeps its own full copy until it is deleted and `init` runs again; and Terraform does not make the cache safe for concurrent use, so `init` runs in one directory at a time, never in parallel loops or terminals.
 
 - **Terraform is HashiCorp's release binary**, defined in `nix/terraform.nix`: the zip from `releases.hashicorp.com`, pinned by version and by the SHA-256 HashiCorp publishes for each platform. nixpkgs also packages Terraform, but the public Nix cache never builds unfree packages, so every machine would compile it from source. Upgrading means changing the version and copying the four hashes from that release's `SHA256SUMS`.
 - **Its license is declared.** Since 1.6 Terraform is under the Business Source License, which Nix counts as unfree. `nix/terraform.nix` says so (`meta.license`), and the flake allows that one package by name (`allowUnfreePredicate`), so accepting it is a visible decision. The BSL only restricts offering a product that competes with HashiCorp's.
@@ -48,11 +62,12 @@ The `Terraform` job in CI runs these on every pull request, through the flake's 
 | Check | Command (from `infra/`) | Catches |
 |---|---|---|
 | Format | `terraform fmt -check -recursive` | Unformatted code |
-| Validation | `terraform -chdir=bootstrap init -backend=false`, then `validate` | Syntax, types, references, provider schema |
+| Validation | `terraform -chdir=<dir> init -backend=false`, then `validate` | Syntax, types, references, provider schema |
 | Lint | `tflint --recursive` | Deprecated syntax, unused declarations, missing types and versions |
-| Tests | `terraform -chdir=bootstrap test` | The properties that must hold, below |
+| Module docs | `terraform-docs --output-check .` | A module README whose inputs and outputs tables no longer match the code (`terraform-docs .` regenerates them) |
+| Tests | `terraform -chdir=<dir> test` | The properties that must hold, below |
 
-`init -backend=false` downloads the providers but never touches a backend, so it needs no bucket and no credentials. It writes `.terraform/`, which is git-ignored and takes about 770 MB for the AWS provider (safe to delete; the next `init` downloads it again), and `.terraform.lock.hcl`.
+`<dir>` is each stack and each module: `bootstrap`, `modules/network`, `envs/prod`. `init -backend=false` downloads the providers but never touches a backend, so it needs no bucket and no credentials. It writes `.terraform/`, which is git-ignored and only links to the shared plugin cache, and `.terraform.lock.hcl`, which is committed in every directory, modules included, so their tests run against the same provider version as CI.
 
 ### Tests with a mocked provider
 
@@ -77,11 +92,25 @@ run "plain_http_is_denied" {
 - **They test intent, not AWS.** A mock cannot tell whether AWS would accept a setting; it proves that the code asks for what it should: a private, versioned, encrypted bucket. `validate` covers the provider's schema.
 - **Values a test needs are overridden.** `override_data` gives `aws_caller_identity` a fixed account ID, so the bucket name can be asserted.
 - **Data sources are mocked too.** The bucket policy is built with `jsonencode` instead of the `aws_iam_policy_document` data source, whose JSON a mock would make up.
-- **`command = plan`.** A `run` applies by default, and the test then destroys what it applied; `prevent_destroy` would make that cleanup fail. Plans are enough to read the configuration.
+- **`command = plan`.** A `run` applies by default, and the test then destroys what it applied; `prevent_destroy` would make that cleanup fail. Plans are enough to read the configuration. The exception is a check that compares IDs, such as which route table a subnet uses: they are unknown in a plan, so that `run` applies against the mock, which creates nothing, in a module without `prevent_destroy`.
 
 | Test file | What it proves |
 |---|---|
 | `bootstrap/tests/state.tftest.hcl` | Bucket named per account, versioned, encrypted, never public, TLS only; old versions expire but the newest are kept; retention must be positive; a project name S3 would reject fails at plan time |
+| `modules/network/tests/network.tftest.hcl` | Public and private subnets in two zones with non-overlapping ranges; each subnet uses its own route table, and only the public one has a route, to the internet gateway; no subnet hands out public IPs; the default security group allows nothing; DNS is on; one zone, more zones than the region has, a VPC smaller than /20, an IPv6 range or one with host bits set is rejected |
+| `envs/prod/tests/prod.tftest.hcl` | How prod wires the modules: they are named `<project>-prod`; a project name S3 would reject fails at plan time |
+
+Each module tests its own properties; a stack's tests only check how it joins the modules, so a property is asserted once.
+
+## Modules
+
+- **Versions:** a module declares only a lower bound for the AWS provider (`>= 6.73`); the stack that uses it pins the version (`~> 6.73`) and its lock decides the exact one.
+- **README:** what the module is for and why it is built that way, written by hand, followed by the inputs and outputs tables that `terraform-docs` generates between the `BEGIN_TF_DOCS` and `END_TF_DOCS` markers. The tables come from each variable's and output's `description`, so those are written for a reader of the README.
+- **Tests:** each module has its own `tests/`, with a mocked provider like the stacks.
+
+| Module | What it creates |
+|---|---|
+| [`network`](../infra/modules/network/README.md) | VPC over two zones; public subnets for the backend, private ones for the database with no route out; no NAT gateway; the default security group emptied |
 
 ## First deploy
 
@@ -125,7 +154,8 @@ The ephemeral deploys destroy `envs/prod` only; the bootstrap stays, since its b
 
 ## Extending
 
-- **A new stack:** a directory under `infra/` with `versions.tf` pinned like the bootstrap's, a `backend "s3"` block with its own `key`, a `tests/` directory, and a block of its own in the `Terraform` job of `ci.yml`.
+- **A new stack:** a directory under `infra/` with `versions.tf` pinned like the bootstrap's, a `backend "s3"` block with its own `key`, a `backend.hcl.example`, a `tests/` directory, and a block of its own in the `Terraform` job of `ci.yml`.
+- **A new module:** a directory under `modules/` with `versions.tf` (lower bound only), a `README.md` with the `terraform-docs` markers, a `tests/` directory, and a block of its own in the `Terraform` job. Then wire it in `envs/prod` and add a test there for how it is joined.
 - **A new property worth guarding** (a port that must stay closed, a resource that must stay private): an `assert` in that stack's tests, so a later change cannot quietly undo it.
-- **Upgrading the AWS provider:** raise the constraint in `versions.tf`, run `terraform -chdir=bootstrap init -upgrade -backend=false` and commit the updated `.terraform.lock.hcl`. The lock holds the provider's published checksums (`zh:`) for every platform, plus a hash of the unpacked package (`h1:`) for each platform that has run `init`; the first `init` on another platform, a Mac for instance, adds its own `h1:` line, which is committed like any other change to the lock.
+- **Upgrading the AWS provider:** raise the constraint in every `versions.tf` (`~>` in the stacks, `>=` in the modules), run `terraform -chdir=<dir> init -upgrade -backend=false` in each directory and commit the updated `.terraform.lock.hcl` files. The lock holds the provider's published checksums (`zh:`) for every platform, plus a hash of the unpacked package (`h1:`) for each platform that has run `init`; the first `init` on another platform, a Mac for instance, adds its own `h1:` line, which is committed like any other change to the lock.
 - **Upgrading Terraform:** the version and the four hashes in `nix/terraform.nix`, and `required_version` if the minor changes.

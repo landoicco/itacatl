@@ -64,8 +64,9 @@ jobs:
       - run: npm run build
 
   terraform:
-    # Terraform and TFLint come from the flake's infra shell, so CI runs the exact versions of
-    # the dev shell. No AWS credentials: every check runs offline, tests against a mocked provider
+    # Terraform, TFLint and terraform-docs come from the flake's infra shell, so CI runs the exact
+    # versions of the dev shell. No AWS credentials: every check runs offline, tests against a
+    # mocked provider. The shell's plugin cache downloads the AWS provider once for every directory
     name: Terraform
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -77,12 +78,24 @@ jobs:
       - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
       - run: terraform -chdir=infra fmt -check -recursive
       - run: tflint --chdir=infra --recursive
-      # One block per stack
+      # Fails when a module's README tables no longer match its variables and outputs
+      - run: terraform-docs --output-check infra
+      # One block per stack and per module
       - name: bootstrap
         run: |
           terraform -chdir=infra/bootstrap init -backend=false -input=false
           terraform -chdir=infra/bootstrap validate
           terraform -chdir=infra/bootstrap test
+      - name: modules/network
+        run: |
+          terraform -chdir=infra/modules/network init -backend=false -input=false
+          terraform -chdir=infra/modules/network validate
+          terraform -chdir=infra/modules/network test
+      - name: envs/prod
+        run: |
+          terraform -chdir=infra/envs/prod init -backend=false -input=false
+          terraform -chdir=infra/envs/prod validate
+          terraform -chdir=infra/envs/prod test
 
   images:
     # Catches Dockerfile problems that the build tools alone do not see
