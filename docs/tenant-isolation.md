@@ -196,15 +196,29 @@ Hibernate's filter only sees what goes through Hibernate. Native SQL (`JdbcTempl
 
 In `application.properties`, the datasource connects as `itacatl_app` and Flyway as the owner (`spring.flyway.user`, `spring.flyway.password`), so the same deploy migrates with full rights and serves requests with the least. The role cannot `ALTER TABLE … DISABLE ROW LEVEL SECURITY`: only an owner can.
 
-The name `itacatl_app` is fixed, like a table name: it is part of the schema's contract, and the migrations grant it privileges by name. Only its password is a secret (`DB_APP_PASSWORD`), and it never passes through a migration. The role is created **before** the migrations, by whoever creates the database:
+The name `itacatl_app` is fixed, like a table name: it is part of the schema's contract, and the migrations grant it privileges by name. Only its password is a secret (`DB_APP_PASSWORD`), and it never passes through a migration.
 
-| Environment | Who creates `itacatl_app` |
+#### How the role is created
+
+The application creates it, with `AppRoleCallback`: a Flyway callback that runs before every migration (`BEFORE_MIGRATE`), on Flyway's connection as the owner. The same code runs in every environment, so the role cannot be set up differently in one of them:
+
+| Environment | How `itacatl_app` signs in |
 |---|---|
-| docker compose | `docker/postgres/create-app-role.sh`, run by the postgres image when its data directory is created |
-| Tests | `src/test/resources/testcontainers/create-app-role.sql`, the container's init script |
-| AWS | Not decided yet: an [open decision](infra-plan.md#open-decisions) of the infrastructure phases, since the database is not reachable from outside the VPC |
+| docker compose | Password, `DB_APP_PASSWORD` from `.env` |
+| Tests | Password, `DB_APP_PASSWORD` from `application-test.properties` |
+| AWS | An IAM token from the instance's role (`itacatl.app-role.iam-authentication=true`), wired in with the `backend` module |
 
-If it does not exist, `V4` stops with a message saying so, instead of failing on a `GRANT`. In docker compose, `DB_APP_PASSWORD` is required (`${DB_APP_PASSWORD:?…}`): without it, `docker compose up` stops before starting anything, instead of creating the role with an empty password and leaving the backend unable to connect.
+On each start the callback:
+
+1. **Creates the role if it is missing,** with `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS`. These attributes are only set on creation: changing `SUPERUSER` or `BYPASSRLS` later needs a superuser, which the RDS master user is not.
+2. **Refuses a role that bypasses the policies.** If an `itacatl_app` that is a superuser or has `BYPASSRLS` already exists, startup fails, since Row-Level Security would not apply to it.
+3. **Sets how it signs in.** With a password, it sets the datasource's (`spring.datasource.password`), so changing `DB_APP_PASSWORD` and restarting rotates it. With IAM, it grants `rds_iam`, RDS's role for token sign-in, and removes the password.
+
+**Why the application, and not the infrastructure.** Whoever migrates already holds the owner's credentials, so creating the roles the migrations grant to is part of the same job; it adds no access the application did not have. The alternatives were worse here: Terraform's PostgreSQL provider would need a network path into the private database on every apply, and would keep the password in the state; a manual step through SSM would be repeated by hand on every new environment. In a larger system the migrations would run as a separate job before the deploy, with the same callback; with one instance, migrating at startup is the accepted trade-off.
+
+**Role statements cannot take bind parameters**, so the callback builds them with PostgreSQL's `format()`, which quotes the role as an identifier (`%I`) and the password as a literal (`%L`). A password with quotes or backslashes is never parsed as SQL.
+
+`V4` still checks that the role exists, so a database migrated some other way stops with a clear message instead of failing on a `GRANT`. In docker compose, `DB_APP_PASSWORD` is required (`${DB_APP_PASSWORD:?…}`): without it, `docker compose up` stops before starting anything.
 
 ### The policies
 
@@ -301,7 +315,7 @@ for (Long tenantId : tenantIds) {
 
 ### A new environment
 
-Create `itacatl_app` with a password before the first migration, as `docker/postgres/create-app-role.sh` does, and give the application `DB_APP_PASSWORD`. The owner's credentials (`DB_USER`, `DB_PASSWORD`) are only needed by Flyway.
+Give the application the owner's credentials for Flyway (`DB_USER`, `DB_PASSWORD`) and either `DB_APP_PASSWORD` or IAM authentication for `itacatl_app`. `AppRoleCallback` creates the role on the first start; there is nothing to run in the database by hand.
 
 ## Traps
 
@@ -314,7 +328,8 @@ Create `itacatl_app` with a password before the first migration, as `docker/post
 - **MockMvc runs requests on the test's thread.** That thread is in `CROSS_TENANT`, so without `ServerThreadMockMvcConfig` an endpoint that no rule covers would see every business in tests and nothing in production.
 - **Slice tests do not exercise Row-Level Security.** `@DataJpaTest` connects as the owner, whom the policies do not apply to. Only the full-application tests (`AppRoleTestcontainersConfiguration`) connect as `itacatl_app`.
 - **`@ServiceConnection` would connect the application as the owner.** Spring Boot builds both the datasource's and Flyway's connection from the container. `AppRoleTestcontainersConfiguration` limits it to Flyway (`@ServiceConnection(type = FlywayConnectionDetails.class)`) and sets the datasource to `itacatl_app` itself.
-- **The role is created once per database.** The postgres image runs its init scripts only when the data directory is empty: a database created before `DB_APP_PASSWORD` was set keeps a role without a usable password, and needs `docker compose down -v`.
+- **Slice tests need the callback imported.** They do not scan components, so `TestcontainersConfiguration` imports `AppRoleCallback`; without it, `V4` stops because the role does not exist.
+- **The callback sees the datasource's password, not the role's.** Every start sets the role's password to `spring.datasource.password`, so a password changed by hand in the database is overwritten on the next start.
 - **A failed connection can look like something else.** When `itacatl_app` cannot sign in, Spring Boot fails at startup with *Failed to determine DatabaseDriver* from Spring Session's initializer, the first bean that opens a connection. Check the role and `DB_APP_PASSWORD` first.
 
 ## Known limitations
@@ -328,6 +343,7 @@ Create `itacatl_app` with a password before the first migration, as `docker/post
 |---|---|
 | `TenantIsolationIntegrationTest` | In a business's scope, repositories see only its rows, also through `findById` and queries that do not mention the tenant; new rows get that business and rows of another are rejected; `NONE` sees no tenant rows but still sees businesses; `CROSS_TENANT` sees all. Over HTTP, requests that start as `NONE` get the right scope from the interceptor, and leave the thread as they found it |
 | `RowLevelSecurityIntegrationTest` | With native SQL as `itacatl_app`: a business sees only its rows, cannot write or move rows into another, `CROSS_TENANT` reads every business but no drafts and cannot write, no tenant sees nothing (also on a connection taken from the pool directly), and the role is not an owner, has no `BYPASSRLS` and cannot disable the policies |
+| `AppRoleCallbackIntegrationTest` | `itacatl_app` exists before the migrations; a new role cannot bypass the policies; an existing one gets the current password, quoted however it is written; a role with `BYPASSRLS` is refused, and a missing password is refused before anything is created; with IAM the role joins `rds_iam` and loses its password. It works on roles of its own, so the one the other tests use never changes |
 | `MarketplaceSeederRowLevelSecurityIntegrationTest` | The seed as it runs at startup, as `itacatl_app` with no scope: every row lands in its business, and a seed that fails halfway removes what it created |
 | `TenantConfigTest` | The URL rules: marketplace reads are cross-tenant, writes under public paths get `NONE`, management URLs get their business, unknown slugs and other URLs get `NONE` |
 | `TenantScopeInterceptorTest` | A completed request, and an async one that releases its thread, leave the thread without their tenant |

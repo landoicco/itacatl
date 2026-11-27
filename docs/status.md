@@ -9,7 +9,7 @@ Where the work stands, what comes next, and what is still undecided. It is the e
 - **Latest:** the `network` module and the `envs/prod` stack that wires the modules together.
 - **Goal:** the infrastructure is finished when it is [deploy-ready](infra-plan.md#definition-of-done), with nothing created in AWS until the maintainer decides to launch.
 - **Next:** the rest of Phase 2, in this order, each module joining `envs/prod` in its own PR:
-  1. `database`: RDS, and how `itacatl_app` is created.
+  1. `database`: RDS (in progress). `itacatl_app` is now created by the backend itself, with IAM sign-in in AWS.
   2. `backend`: ECR, the spot Auto Scaling group, IAM; Trivy joins the flake here.
   3. `frontend`: S3, CloudFront, ACM, Route 53.
   4. `observability`: alarms and dashboard, and the runbook's remaining steps.
@@ -21,7 +21,7 @@ Where the work stands, what comes next, and what is still undecided. It is the e
 
 Not settled yet; each needs the maintainer's call before the work that depends on it.
 
-- **Infrastructure:** the [open decisions of the infra plan](infra-plan.md#open-decisions) (domain, rate limiting, how `itacatl_app` is created in RDS).
+- **Infrastructure:** the [open decisions of the infra plan](infra-plan.md#open-decisions) (domain, rate limiting).
 
 Settled decisions are in the [ADRs](adr/) and in each guide's "why" sections. One without its own guide: the Docker images keep building from their Dockerfiles rather than from Nix, so trying the app locally needs only Docker.
 

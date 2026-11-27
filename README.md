@@ -51,7 +51,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-The database creates the backend's own role, `itacatl_app`, with the password in `DB_APP_PASSWORD`; Flyway migrates with the owner's `DB_USER` and `DB_PASSWORD` ([why two roles](docs/tenant-isolation.md#two-database-roles)).
+The backend creates its own role, `itacatl_app`, with the password in `DB_APP_PASSWORD`, then Flyway migrates with the owner's `DB_USER` and `DB_PASSWORD` ([why two roles](docs/tenant-isolation.md#two-database-roles)).
 
 Open `http://localhost:3000`. The backend seeds three sample ice cream shops with today's and tomorrow's menus, so there is always something open or about to open. The API runs at `http://localhost:8080`:
 
@@ -237,7 +237,6 @@ frontend/   React app
 infra/      Terraform for AWS (not deployed)
 nix/        packages the dev shell defines itself
 docs/       guides, product spec, infra plan, ADRs (docs/adr/)
-docker/     init scripts for the local containers
 ```
 
 ## License
