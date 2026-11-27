@@ -24,6 +24,9 @@ locals {
   azs = slice(data.aws_availability_zones.available.names, 0, var.az_count)
 }
 
+# No flow logs: CloudWatch bills for every GB they ingest. The observability module decides
+# whether they are worth it.
+#trivy:ignore:AVD-AWS-0178 Flow logs bill per GB ingested; decided with the observability module
 resource "aws_vpc" "this" {
   cidr_block = var.cidr_block
 

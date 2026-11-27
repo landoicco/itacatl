@@ -53,6 +53,7 @@ resource "random_id" "final_snapshot" {
   }
 }
 
+#trivy:ignore:AVD-AWS-0133 Database monitoring is decided with the observability module
 resource "aws_db_instance" "this" {
   identifier     = var.name
   engine         = "postgres"
