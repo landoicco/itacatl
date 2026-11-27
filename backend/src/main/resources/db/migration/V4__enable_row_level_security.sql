@@ -5,8 +5,8 @@
 -- Two roles take part:
 -- - The tables' owner, which runs these migrations. Policies do not apply to a table's owner.
 -- - itacatl_app, which the application connects as. It owns nothing and cannot bypass the
---   policies. It is created outside the migrations, with its password (docker/postgres,
---   Testcontainers, Terraform), and gets its privileges here.
+--   policies. It is created before the migrations by AppRoleCallback, outside them so its
+--   password never passes through one, and gets its privileges here.
 
 DO $$
 BEGIN

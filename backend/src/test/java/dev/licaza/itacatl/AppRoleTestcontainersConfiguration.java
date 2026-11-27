@@ -21,13 +21,13 @@ public class AppRoleTestcontainersConfiguration {
     return TestcontainersConfiguration.postgres();
   }
 
-  // Password from testcontainers/create-app-role.sql
+  // The password is DB_APP_PASSWORD from application-test.properties, which AppRoleCallback gives
+  // the role before the migrations
   @Bean
   DynamicPropertyRegistrar appRoleConnection(PostgreSQLContainer postgres) {
     return registry -> {
       registry.add("spring.datasource.url", postgres::getJdbcUrl);
       registry.add("spring.datasource.username", () -> "itacatl_app");
-      registry.add("spring.datasource.password", () -> "itacatl-app-test");
     };
   }
 }

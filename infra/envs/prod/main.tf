@@ -9,3 +9,12 @@ module "network" {
   source = "../../modules/network"
   name   = local.name
 }
+
+module "database" {
+  source     = "../../modules/database"
+  name       = local.name
+  vpc_id     = module.network.vpc_id
+  subnet_ids = module.network.private_subnet_ids
+
+  deletion_protection = var.database_deletion_protection
+}

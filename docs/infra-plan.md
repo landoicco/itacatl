@@ -31,7 +31,7 @@ flowchart LR
 ```
 
 - **Backend:** an Auto Scaling group of one instance, spot only, using a mixed instances policy (`price-capacity-optimized` across several 2 GB Graviton types, such as `t4g.small`, `c6g.medium` and `c7g.medium`, in both zones) and capacity rebalancing. The ASG replaces the instance when it is reclaimed or fails. There is no on-demand fallback: listing several types and zones makes it rare for none of them to have spot capacity, and when that happens only the backend stops, while the database and its data are unaffected. 2 GB is the smallest size that fits the JVM, Docker and the SSM agent; a 1 GB `t4g.micro` would save about $2/month at the cost of out-of-memory restarts. The instance runs the backend image with Docker; the database never runs on it.
-- **Database:** RDS PostgreSQL (PostGIS as an extension), smallest Graviton class, single-AZ. It is the one component kept whole: automated backups, encrypted storage, deletion protection and a final snapshot when it is destroyed, since the data is the only thing the ASG cannot rebuild. The master password is managed by RDS in Secrets Manager. The master user owns the tables and runs Flyway; the backend connects as `itacatl_app`, a role subject to Row-Level Security, which must exist before the first migration ([tenant isolation](tenant-isolation.md#two-database-roles)). Its password is an SSM SecureString, which adds no cost.
+- **Database:** RDS PostgreSQL (PostGIS as an extension), smallest Graviton class, single-AZ. It is the one component kept whole: automated backups, encrypted storage, deletion protection and a final snapshot when it is destroyed, since the data is the only thing the ASG cannot rebuild. The master password is managed by RDS in Secrets Manager. The master user owns the tables and runs Flyway; the backend connects as `itacatl_app`, a role subject to Row-Level Security, which the backend itself creates before migrating ([how the role is created](tenant-isolation.md#how-the-role-is-created)). It signs in with IAM database authentication: a short-lived token from the instance's IAM role, so the runtime holds no database password.
 - **Frontend:** static build in S3, served by CloudFront. Same origin for the app and `/api`, so no CORS in AWS.
 - **Notifications:** the backend publishes to SQS; a Lambda outside the VPC sends the WhatsApp messages. Reservations stay synchronous, because they must check stock before confirming.
 - **Images:** ECR with a lifecycle policy that keeps the last few tags.
@@ -39,6 +39,37 @@ flowchart LR
 - **Configuration:** SSM Parameter Store (SecureString for secrets other than the database password).
 - **Access:** SSM Session Manager, no SSH.
 - **Observability:** CloudWatch Logs with short retention, alarms (instance health, RDS storage and CPU, DLQ depth, CloudFront 5xx) and one dashboard.
+
+### Inside the VPC
+
+```mermaid
+flowchart TB
+    cf[CloudFront] -->|"HTTP, from the CloudFront prefix list only"| ec2
+    subgraph vpc ["VPC 10.0.0.0/16 (network)"]
+        igw["Internet gateway"]
+        subgraph z1 ["Zone 1"]
+            subgraph pub1 ["Public subnet 10.0.0.0/24"]
+                ec2["Backend instance (backend)<br/>spot, one at a time"]
+            end
+            subgraph priv1 ["Private subnet 10.0.128.0/24"]
+                rds[("RDS PostgreSQL (database)<br/>single-AZ")]
+            end
+        end
+        subgraph z2 ["Zone 2"]
+            subgraph pub2 ["Public subnet 10.0.1.0/24"]
+                spare["Where the ASG launches<br/>the replacement, if zone 1<br/>has no spot capacity"]
+            end
+            subgraph priv2 ["Private subnet 10.0.129.0/24"]
+                second["Second zone of the RDS<br/>subnet group, which RDS<br/>requires; empty"]
+            end
+        end
+    end
+    igw <-->|"public route table: 0.0.0.0/0"| pub1 & pub2
+    ec2 -->|"5432, TLS, IAM token<br/>backend SG to database SG"| rds
+    ec2 -.->|"ECR, SSM, Secrets Manager,<br/>through the internet gateway"| igw
+```
+
+Each box names the module that creates it. The private subnets share a route table with only the local route, so the database has no path to or from the internet; the public ones reach it through the internet gateway. The database's security group admits only the backend's, on port 5432, and the backend's admits only CloudFront. The zones are the region's first two standard ones other than `use1-az3`.
 
 ## Cost rules
 
@@ -91,6 +122,28 @@ infra/
 - `default_tags` on the provider: `Project`, `Env`, `ManagedBy`.
 - Every stack and module has `terraform test` files that run against a mocked AWS provider.
 
+## Definition of done
+
+The infrastructure is finished when it is **deploy-ready**: on the day the maintainer decides to launch, the runbook is followed from start to end without designing or writing anything new. Nothing of this project exists in the AWS account before that day, not even the state bucket or a read-only `plan`, so every check below runs without AWS. Small fixes that only a first apply can reveal are accepted after launch: a missing IAM permission, user data details, alarm thresholds, JVM memory, an instance type without spot capacity.
+
+### Each module PR
+
+1. CI passes `fmt`, `tflint`, `validate`, `terraform-docs` and the mocked tests; from the `backend` module on, `trivy` finds nothing that was not accepted on purpose.
+2. The module joins `envs/prod`, and the stack's tests check how it is wired to the others.
+3. Its cost fits the [estimate](#estimated-monthly-cost-if-left-running).
+4. Docs: the module's README, the tests table of the [Terraform guide](terraform.md), its step in the runbook, and what to check about it on the first apply, such as values a mock cannot verify against AWS (instance types, engine versions).
+5. The status page is updated.
+
+### Deploy-ready
+
+1. **Complete:** every module except `notifications` is in `envs/prod`. Only a written list of account prerequisites is created by hand: the hosted zone, AWS Budgets and the maintainer's sign-in.
+2. **Checked without AWS:** everything above, plus an Infracost estimate within the $30 ceiling in CI.
+3. **The application is ready for AWS:** the `aws` profile is complete (database access through IAM, configuration from SSM and Secrets Manager, ECS JSON logs), and the backend image builds for arm64, the architecture of the Graviton instances.
+4. **The runbook goes end to end:** from an empty account to a running app with a smoke test, and back to nothing with a destroy, with exact commands. It covers destroying a database under deletion protection and what happens to its final snapshot, and gathers the first-apply checks of every module.
+5. **No open decision blocks it:** each one in the [list below](#open-decisions) is settled or deferred on purpose with its known limitation.
+
+The deploy itself and its evidence are Phase 4, outside this definition.
+
 ## Work phases
 
 The product rework ([roadmap in the product spec](product-spec.md#rework-roadmap)) runs after Phase 0 and before Phase 4, so the deployment evidence comes from the real domain.
@@ -120,19 +173,23 @@ One PR per module, in this order; each joins `envs/prod` in the same PR, so the 
 
 - [x] Add `terraform-docs` to `flake.nix`, with a plugin cache shared by every directory
 - [x] `network` module, and `envs/prod` wiring it
-- [ ] `database` module
+- [x] `database` module, and the runbook's destroy steps
 - [ ] `backend` module; add `trivy` to `flake.nix`, now that there are resources worth scanning
 - [ ] `frontend` module
 - [ ] `observability` module
-- [ ] The runbook's remaining steps: applying `envs/prod` and pushing the backend image to ECR
+- [ ] The application's `aws` profile: database access through IAM, configuration from SSM and Secrets Manager
+- [ ] The runbook's remaining steps: applying `envs/prod`, pushing the backend image to ECR, a smoke test, the destroy, and the first-apply checks
 - [ ] `notifications` module, postponed until slices 5 and 6 need it
 
-**Done when:** `envs/prod` passes the same checks, `trivy` finds nothing unaccepted, and an Infracost estimate stays within the table above.
+**Done when:** each module PR meets the [definition of done](#each-module-pr).
 
 ### Phase 3: CI
 - [x] `fmt`, `tflint`, `validate` and `terraform test` on PRs, with no AWS credentials, through the flake's `infra` shell (brought forward to Phase 1)
 - [ ] `trivy` on PRs
 - [ ] Add `infracost` to `flake.nix` (free API key, kept out of the repository) and run it on PRs
+- [ ] Build the backend image for arm64 too
+
+**Done when:** the infrastructure is [deploy-ready](#deploy-ready).
 
 ### Phase 4: Ephemeral deploy and evidence
 - [ ] Add `awscli2` to `flake.nix`; apply the bootstrap and migrate its state ([runbook](terraform.md#first-deploy))
@@ -149,4 +206,3 @@ One PR per module, in this order; each joins `envs/prod` in the same PR, so the 
 
 - Production domain.
 - CloudFront flat-rate free plan (includes WAF) if compatible with an EC2 origin; otherwise rate limiting in Spring with Bucket4j.
-- How `itacatl_app` is created in RDS. The Terraform PostgreSQL provider needs network access to the database, which is not public; the alternatives are a one-time step through SSM Session Manager on the instance, or the backend creating it at startup with the master credentials before Flyway runs.

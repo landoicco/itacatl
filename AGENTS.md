@@ -17,7 +17,7 @@ The goal is learning: every technical choice should be one the maintainer can de
 
 - `backend/`: Spring Boot 4 (Java 21), Maven, Flyway, JPA. Package root `dev.licaza.itacatl`.
 - `frontend/`: React 19, TypeScript, Vite, Tailwind, Vitest.
-- `docker-compose.yml` + `.env` (git-ignored, copied from `.env.example`): local full stack (database, backend, frontend). `docker/` holds the containers' init scripts.
+- `docker-compose.yml` + `.env` (git-ignored, copied from `.env.example`): local full stack (database, backend, frontend).
 - `infra/`: Terraform for AWS: stacks (`bootstrap/` first, then `envs/prod/`) built from `modules/`. Ready but not deployed. See `docs/terraform.md`.
 - `nix/`: packages the flake defines itself (`terraform.nix`).
 - `docs/`: specs, plans, and ADRs in `docs/adr/`.
