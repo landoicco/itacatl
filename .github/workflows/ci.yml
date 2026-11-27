@@ -80,6 +80,9 @@ jobs:
       - run: tflint --chdir=infra --recursive
       # Fails when a module's README tables no longer match its variables and outputs
       - run: terraform-docs --output-check infra
+      # Misconfigurations, of every severity. Accepted findings are ignored inline, with a reason.
+      # The flake pins Trivy's version, so its check for a newer one is only noise
+      - run: trivy config --exit-code 1 --skip-version-check infra
       # One block per stack and per module
       - name: bootstrap
         run: |
@@ -96,6 +99,11 @@ jobs:
           terraform -chdir=infra/modules/database init -backend=false -input=false
           terraform -chdir=infra/modules/database validate
           terraform -chdir=infra/modules/database test
+      - name: modules/backend
+        run: |
+          terraform -chdir=infra/modules/backend init -backend=false -input=false
+          terraform -chdir=infra/modules/backend validate
+          terraform -chdir=infra/modules/backend test
       - name: envs/prod
         run: |
           terraform -chdir=infra/envs/prod init -backend=false -input=false

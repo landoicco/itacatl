@@ -7,6 +7,7 @@ locals {
   state_bucket_arn = "arn:aws:s3:::${local.state_bucket}"
 }
 
+#trivy:ignore:AVD-AWS-0089 Access logs need a second bucket; only Terraform, run by the maintainer, reads it
 resource "aws_s3_bucket" "state" {
   bucket = local.state_bucket
 
@@ -28,6 +29,7 @@ resource "aws_s3_bucket_versioning" "state" {
 
 # SSE-S3 rather than a customer managed KMS key, which would cost $1/month for no extra
 # protection here: only this account's principals can read the bucket anyway.
+#trivy:ignore:AVD-AWS-0132 A customer-managed key bills monthly; see above
 resource "aws_s3_bucket_server_side_encryption_configuration" "state" {
   bucket = aws_s3_bucket.state.id
 

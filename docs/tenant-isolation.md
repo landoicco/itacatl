@@ -206,7 +206,7 @@ The application creates it, with `AppRoleCallback`: a Flyway callback that runs 
 |---|---|
 | docker compose | Password, `DB_APP_PASSWORD` from `.env` |
 | Tests | Password, `DB_APP_PASSWORD` from `application-test.properties` |
-| AWS | An IAM token from the instance's role (`itacatl.app-role.iam-authentication=true`), wired in with the `backend` module |
+| AWS | An IAM token from the instance's role (`itacatl.app-role.iam-authentication=true`), which the [`backend` module](../infra/modules/backend/README.md) allows `rds-db:connect` as `itacatl_app` only |
 
 On each start the callback:
 

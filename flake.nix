@@ -29,6 +29,7 @@
           terraform      # HashiCorp's binary (nix/terraform.nix)
           pkgs.tflint    # Terraform linter
           pkgs.terraform-docs # inputs and outputs tables in each module's README
+          pkgs.trivy     # misconfiguration scan of the Terraform code
         ];
 
         # Every directory that runs terraform init would download its own copy of the AWS
@@ -75,6 +76,7 @@
             echo "   🏗️  Terraform  ${terraform.version}"
             echo "   🧹 TFLint     ${pkgs.tflint.version}"
             echo "   📝 tf-docs    ${pkgs.terraform-docs.version}"
+            echo "   🔍 Trivy      ${pkgs.trivy.version}"
             echo ""
           '';
         };

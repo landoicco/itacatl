@@ -227,6 +227,7 @@ gh release create v0.1.0 --title "v0.1.0" --notes-file release-desc-body.md
 | [CI and safeguards](docs/ci.md) | CI jobs, the ruleset on `main`, Dependabot and runtime upgrades |
 | [Infra plan](docs/infra-plan.md) | AWS architecture, cost rules, work phases |
 | [Terraform](docs/terraform.md) | Stacks, remote state, checks and tests without AWS, first-deploy runbook |
+| [The `aws` profile](docs/aws-profile.md) | How the backend runs in AWS: secrets from Secrets Manager, IAM sign-in to RDS, verified TLS |
 | [ADRs](docs/adr/) | Architecture decisions and their trade-offs |
 
 ## Layout

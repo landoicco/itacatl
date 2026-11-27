@@ -1,0 +1,70 @@
+#!/bin/bash
+# Runs once, as root, on the instance's first boot. Its output goes to
+# /var/log/cloud-init-output.log, readable through Session Manager.
+set -euo pipefail
+
+region="${region}"
+
+token=$(curl -fsS -X PUT http://169.254.169.254/latest/api/token \
+  -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
+instance_id=$(curl -fsS -H "X-aws-ec2-metadata-token: $token" \
+  http://169.254.169.254/latest/meta-data/instance-id)
+
+# The group keeps the instance pending until this reports on its launch hook: CONTINUE puts it in
+# service, ABANDON has it terminated and replaced
+report() {
+  aws autoscaling complete-lifecycle-action --region "$region" \
+    --auto-scaling-group-name "${autoscaling_group}" --lifecycle-hook-name "${lifecycle_hook}" \
+    --instance-id "$instance_id" --lifecycle-action-result "$1"
+}
+# Any failed step abandons the instance at once, instead of waiting for the hook's timeout
+trap 'status=$?; if [ "$status" -ne 0 ]; then report ABANDON || true; fi' EXIT
+
+dnf install -y docker
+systemctl enable --now docker
+
+# The tag a deploy wrote. "none" until the first deploy: the instance goes into service without
+# the app, so the first apply does not replace it again and again
+tag=$(aws ssm get-parameter --region "$region" --name "${image_tag_parameter}" \
+  --query Parameter.Value --output text)
+if [ "$tag" = none ]; then
+  echo "No image deployed yet; the first deploy replaces this instance"
+  report CONTINUE
+  exit 0
+fi
+
+aws ecr get-login-password --region "$region" |
+  docker login --username AWS --password-stdin "${registry}"
+
+# 1.5 GB for the container, so the JVM's heap (75% of it, see the Dockerfile) leaves room on a
+# 2 GB instance for the system, Docker and the SSM agent. Nothing here is a secret: the app reads
+# its credentials with the instance's role.
+docker run --detach --name backend --restart unless-stopped \
+  --memory 1536m \
+  --publish ${app_port}:${app_port} \
+  --log-driver awslogs \
+  --log-opt awslogs-region="$region" \
+  --log-opt awslogs-group="${log_group}" \
+  --log-opt awslogs-stream="$instance_id" \
+  --env SPRING_PROFILES_ACTIVE=aws \
+  --env AWS_REGION="$region" \
+  --env DB_HOST="${database_host}" \
+  --env DB_NAME="${database_name}" \
+  --env DB_MASTER_SECRET_ARN="${master_secret_arn}" \
+  "${repository_url}:$tag"
+
+# Take the address and go into service only once the app answers, so a replacement launched while
+# the old instance still runs takes its traffic only when it can serve it. Flyway runs before the
+# app answers, which can take a few minutes on a new database. Ten minutes, within the hook's 15.
+for _ in $(seq 60); do
+  if curl -fsS "http://localhost:${app_port}/actuator/health" >/dev/null; then
+    aws ec2 associate-address --region "$region" --allocation-id "${allocation_id}" \
+      --instance-id "$instance_id" --allow-reassociation
+    report CONTINUE
+    exit 0
+  fi
+  sleep 10
+done
+
+echo "The backend did not become healthy in 10 minutes; abandoning the instance" >&2
+exit 1

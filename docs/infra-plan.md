@@ -30,7 +30,7 @@ flowchart LR
     sqs -.-> dlq[(DLQ)]
 ```
 
-- **Backend:** an Auto Scaling group of one instance, spot only, using a mixed instances policy (`price-capacity-optimized` across several 2 GB Graviton types, such as `t4g.small`, `c6g.medium` and `c7g.medium`, in both zones) and capacity rebalancing. The ASG replaces the instance when it is reclaimed or fails. There is no on-demand fallback: listing several types and zones makes it rare for none of them to have spot capacity, and when that happens only the backend stops, while the database and its data are unaffected. 2 GB is the smallest size that fits the JVM, Docker and the SSM agent; a 1 GB `t4g.micro` would save about $2/month at the cost of out-of-memory restarts. The instance runs the backend image with Docker; the database never runs on it.
+- **Backend:** an Auto Scaling group of one instance, spot only, using a mixed instances policy (`price-capacity-optimized` across several 2 GB Graviton types, such as `t4g.small`, `c6g.medium` and `c7g.medium`, in both zones) and capacity rebalancing. The ASG replaces the instance when it is reclaimed or fails. There is no on-demand fallback: listing several types and zones makes it rare for none of them to have spot capacity, and when that happens only the backend stops, while the database and its data are unaffected. 2 GB is the smallest size that fits the JVM, Docker and the SSM agent; a 1 GB `t4g.micro` would save about $2/month at the cost of out-of-memory restarts. The instance runs the backend image with Docker; the database never runs on it. CloudFront's origin is an Elastic IP, since every new instance has a new public IP: each instance takes it once the app answers its health check, at the price of the public IPv4 address it would have anyway.
 - **Database:** RDS PostgreSQL (PostGIS as an extension), smallest Graviton class, single-AZ. It is the one component kept whole: automated backups, encrypted storage, deletion protection and a final snapshot when it is destroyed, since the data is the only thing the ASG cannot rebuild. The master password is managed by RDS in Secrets Manager. The master user owns the tables and runs Flyway; the backend connects as `itacatl_app`, a role subject to Row-Level Security, which the backend itself creates before migrating ([how the role is created](tenant-isolation.md#how-the-role-is-created)). It signs in with IAM database authentication: a short-lived token from the instance's IAM role, so the runtime holds no database password.
 - **Frontend:** static build in S3, served by CloudFront. Same origin for the app and `/api`, so no CORS in AWS.
 - **Notifications:** the backend publishes to SQS; a Lambda outside the VPC sends the WhatsApp messages. Reservations stay synchronous, because they must check stock before confirming.
@@ -138,7 +138,7 @@ The infrastructure is finished when it is **deploy-ready**: on the day the maint
 
 1. **Complete:** every module except `notifications` is in `envs/prod`. Only a written list of account prerequisites is created by hand: the hosted zone, AWS Budgets and the maintainer's sign-in.
 2. **Checked without AWS:** everything above, plus an Infracost estimate within the $30 ceiling in CI.
-3. **The application is ready for AWS:** the `aws` profile is complete (database access through IAM, configuration from SSM and Secrets Manager, ECS JSON logs), and the backend image builds for arm64, the architecture of the Graviton instances.
+3. **The application is ready for AWS:** the `aws` profile is complete (database access through IAM, secrets from Secrets Manager, ECS JSON logs), and the backend image builds for arm64, the architecture of the Graviton instances.
 4. **The runbook goes end to end:** from an empty account to a running app with a smoke test, and back to nothing with a destroy, with exact commands. It covers destroying a database under deletion protection and what happens to its final snapshot, and gathers the first-apply checks of every module.
 5. **No open decision blocks it:** each one in the [list below](#open-decisions) is settled or deferred on purpose with its known limitation.
 
@@ -174,18 +174,18 @@ One PR per module, in this order; each joins `envs/prod` in the same PR, so the 
 - [x] Add `terraform-docs` to `flake.nix`, with a plugin cache shared by every directory
 - [x] `network` module, and `envs/prod` wiring it
 - [x] `database` module, and the runbook's destroy steps
-- [ ] `backend` module; add `trivy` to `flake.nix`, now that there are resources worth scanning
+- [x] `backend` module; add `trivy` to `flake.nix`, now that there are resources worth scanning
 - [ ] `frontend` module
 - [ ] `observability` module
-- [ ] The application's `aws` profile: database access through IAM, configuration from SSM and Secrets Manager
-- [ ] The runbook's remaining steps: applying `envs/prod`, pushing the backend image to ECR, a smoke test, the destroy, and the first-apply checks
+- [x] The application's `aws` profile: database access through IAM, the master secret from Secrets Manager ([guide](aws-profile.md)). The app reads nothing from SSM yet: the image tag there is read by the instance's user data, and SecureString parameters join when the app needs a secret other than the database's
+- [ ] The runbook's remaining steps: a smoke test and the first-apply checks (applying `envs/prod`, deploying the backend and the destroy are written)
 - [ ] `notifications` module, postponed until slices 5 and 6 need it
 
 **Done when:** each module PR meets the [definition of done](#each-module-pr).
 
 ### Phase 3: CI
 - [x] `fmt`, `tflint`, `validate` and `terraform test` on PRs, with no AWS credentials, through the flake's `infra` shell (brought forward to Phase 1)
-- [ ] `trivy` on PRs
+- [x] `trivy` on PRs (brought forward to the `backend` module)
 - [ ] Add `infracost` to `flake.nix` (free API key, kept out of the repository) and run it on PRs
 - [ ] Build the backend image for arm64 too
 
