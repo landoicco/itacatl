@@ -190,8 +190,9 @@ Nothing in AWS is created until this runbook is followed. It runs from the maint
    Without it, the marketplace is served on CloudFront's own `*.cloudfront.net` domain.
 6. **Deploy the backend**, as in [Deploying the backend](#deploying-the-backend).
 7. **Deploy the frontend**, as in [Deploying the frontend](#deploying-the-frontend).
-8. **Smoke test**, through CloudFront:
+8. **Smoke test**, through CloudFront, back in `infra/envs/prod`:
    ```shell
+   cd ../infra/envs/prod   # from frontend/, where step 7 ends
    url=$(terraform output -raw url)
    curl -fsS "$url/" | grep -q '<div id="root">' && echo "app ok"
    curl -fsS "$url/api/businesses" && echo "api ok"
@@ -241,7 +242,7 @@ aws s3 sync dist "s3://$bucket" --delete --exclude index.html \
 
 - **The locale and theme are build settings** ([i18n](i18n.md), [theming](theming.md)), like the backend's seed file: each deployment builds with its own.
 - **Three steps, in this order.** The new files go up first, then the `index.html` that names them, and only then are the previous build's files deleted. A visitor who loaded the old `index.html` a moment before still finds the files it names.
-- **No invalidation needed.** The other files carry a content hash in their names, so a new build never reuses a name and they can be cached for a year. `index.html` is uploaded with `no-cache`, so CloudFront checks it on every request and a deploy shows at once. If it ever has to be forced: `aws cloudfront create-invalidation --distribution-id "$(terraform output -raw frontend_distribution_id)" --paths /index.html`.
+- **No invalidation needed.** The other files carry a content hash in their names, so a new build never reuses a name and they can be cached for a year. `index.html` is uploaded with `no-cache`, so CloudFront checks it on every request and a deploy shows at once. If it ever has to be forced: `aws cloudfront create-invalidation --distribution-id "$(terraform -chdir=../infra/envs/prod output -raw frontend_distribution_id)" --paths /index.html`.
 
 ### Destroying prod
 

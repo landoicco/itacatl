@@ -36,5 +36,6 @@ module "frontend" {
   source                     = "../../modules/frontend"
   name                       = local.name
   backend_origin_domain_name = module.backend.origin_domain_name
+  backend_origin_port        = module.backend.origin_port
   domain                     = var.domain
 }

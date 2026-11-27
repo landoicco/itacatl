@@ -120,6 +120,7 @@ No modules.
 | image\_tag\_parameter\_name | SSM parameter holding the image tag new instances run, which a deploy updates. |
 | log\_group\_name | CloudWatch log group with the backend's output. |
 | origin\_domain\_name | Public DNS name of the backend's Elastic IP, for CloudFront's origin. |
+| origin\_port | Port the backend answers on over HTTP, for CloudFront's origin. |
 | public\_ip | The backend's Elastic IP. |
 | repository\_url | URL of the ECR repository that deploys push the backend image to. |
 | security\_group\_id | Security group of the backend instance. |

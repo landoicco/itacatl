@@ -156,6 +156,9 @@ resource "aws_route53_record" "certificate_validation" {
   type    = one(aws_acm_certificate.this[0].domain_validation_options).resource_record_type
   records = [one(aws_acm_certificate.this[0].domain_validation_options).resource_record_value]
   ttl     = 300
+  # The record's name is the same for every certificate of this domain in the account, so one
+  # left by an earlier certificate is taken over instead of failing the apply.
+  allow_overwrite = true
 }
 
 resource "aws_acm_certificate_validation" "this" {
@@ -185,12 +188,13 @@ resource "aws_route53_record" "alias" {
 #trivy:ignore:AVD-AWS-0010 Access logs bill for their storage; decided with the observability module
 #trivy:ignore:AVD-AWS-0011 WAF bills monthly; rate limiting is an open decision of the infra plan
 resource "aws_cloudfront_distribution" "this" {
-  enabled             = true
-  comment             = "${var.name}: the app and /api on one origin"
-  default_root_object = "index.html"
-  aliases             = local.has_domain ? [var.domain.name] : []
-  is_ipv6_enabled     = true
-  http_version        = "http2and3"
+  enabled         = true
+  comment         = "${var.name}: the app and /api on one origin"
+  aliases         = local.has_domain ? [var.domain.name] : []
+  is_ipv6_enabled = true
+  http_version    = "http2and3"
+  # No default_root_object: the routes function already gives "/" index.html, so one mechanism
+  # decides what every path of the app serves.
   # North America (Mexico included) and Europe: the cheapest price class.
   price_class = "PriceClass_100"
 
@@ -231,14 +235,15 @@ resource "aws_cloudfront_distribution" "this" {
     }
   }
 
-  # The API: never cached, every method, the viewer's cookies and headers forwarded.
+  # The API: never cached, every method, the viewer's cookies and headers forwarded. Not
+  # compressed: CloudFront only compresses what a cache policy with gzip or Brotli allows, which
+  # CachingDisabled does not.
   ordered_cache_behavior {
     path_pattern               = "/api/*"
     target_origin_id           = local.api_origin
     viewer_protocol_policy     = "https-only"
     allowed_methods            = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
     cached_methods             = ["GET", "HEAD"]
-    compress                   = true
     cache_policy_id            = data.aws_cloudfront_cache_policy.disabled.id
     origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
     response_headers_policy_id = data.aws_cloudfront_response_headers_policy.security_headers.id

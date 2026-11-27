@@ -62,8 +62,11 @@ run "cloudfront_sends_the_api_to_the_backends_address" {
   command = apply
 
   assert {
-    condition     = module.frontend.api_origin_domain_name == module.backend.origin_domain_name
-    error_message = "CloudFront's /api origin must be the backend's Elastic IP."
+    condition = (
+      module.frontend.api_origin_domain_name == module.backend.origin_domain_name &&
+      module.frontend.api_origin_port == module.backend.origin_port
+    )
+    error_message = "CloudFront's /api origin must be the backend's Elastic IP, on the port the backend answers on."
   }
 
   assert {

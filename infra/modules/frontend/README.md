@@ -16,13 +16,15 @@ module "frontend" {
   source                     = "../../modules/frontend"
   name                       = "itacatl-prod"
   backend_origin_domain_name = module.backend.origin_domain_name
+  backend_origin_port        = module.backend.origin_port
   domain                     = { name = "shop.example.com", zone_id = "Z0123456789ABCDEFGHIJ" } # or null
 }
 ```
 
 ## Known limitations
 
-- **CloudFront reaches the backend over plain HTTP.** The instance has no certificate for its address, so the hop from CloudFront's edge to the instance is not encrypted; the viewer's side always is. The backend admits only CloudFront's addresses, but any distribution's, not only this one's.
+- **CloudFront reaches the backend over plain HTTP.** The instance has no certificate for its address, so the hop from CloudFront's edge to the instance is not encrypted; the viewer's side always is. The backend admits only CloudFront's addresses, but any distribution's, not only this one's. An [open decision](../../../docs/infra-plan.md#open-decisions), to settle before launch.
+- **A missing file is a 403 from S3, not the app's 404 page.** A path with an extension that is not in the build (`/favicon.ico`, or a file the last deploy removed) reaches the bucket, and without `s3:ListBucket` S3 answers `AccessDenied` in XML rather than `NoSuchKey`. A custom error response could turn it into the app's page, but it would also replace the API's own 403s (`ACCESS_DENIED`); paths without an extension, the app's routes, always get the app.
 
 ## Accepted Trivy findings
 
@@ -89,8 +91,8 @@ No modules.
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
 | backend\_origin\_domain\_name | DNS name the backend answers on, which CloudFront forwards /api/* to. | `string` | n/a | yes |
+| backend\_origin\_port | Port the backend answers on over HTTP; the backend module's origin\_port output. | `number` | n/a | yes |
 | name | Prefix of every resource name, such as itacatl-prod. | `string` | n/a | yes |
-| backend\_origin\_port | Port the backend listens on, over HTTP. | `number` | `8080` | no |
 | domain | The marketplace's own domain and its Route 53 hosted zone. Null serves it on CloudFront's *.cloudfront.net domain, with no certificate or DNS records; the domain is a deployment setting, chosen by whoever launches. | ```object({ name = string zone_id = string })``` | `null` | no |
 
 ## Outputs
@@ -98,6 +100,7 @@ No modules.
 | Name | Description |
 | ---- | ----------- |
 | api\_origin\_domain\_name | Address CloudFront forwards /api/* to. |
+| api\_origin\_port | Port CloudFront forwards /api/* to, over HTTP. |
 | bucket\_name | S3 bucket that deploys upload the frontend's build to. |
 | distribution\_domain\_name | CloudFront's own domain for the distribution (*.cloudfront.net). |
 | distribution\_id | ID of the CloudFront distribution, which a deploy invalidates index.html on. |

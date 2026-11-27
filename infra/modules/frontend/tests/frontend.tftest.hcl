@@ -8,6 +8,7 @@ mock_provider "aws" {
 variables {
   name                       = "itacatl-test"
   backend_origin_domain_name = "ec2-192-0-2-10.compute-1.amazonaws.com"
+  backend_origin_port        = 8080
 }
 
 run "the_bucket_is_private_and_named_per_account" {
@@ -104,9 +105,9 @@ run "the_api_goes_to_the_backend_uncached" {
       origin.origin_id == "backend" &&
       origin.domain_name == var.backend_origin_domain_name &&
       origin.custom_origin_config[0].origin_protocol_policy == "http-only" &&
-      origin.custom_origin_config[0].http_port == 8080
+      origin.custom_origin_config[0].http_port == var.backend_origin_port
     ])
-    error_message = "The backend's origin must be its address, on the app's port."
+    error_message = "The backend's origin must be its address, on the port it is given."
   }
 }
 

@@ -15,9 +15,8 @@ variable "backend_origin_domain_name" {
 }
 
 variable "backend_origin_port" {
-  description = "Port the backend listens on, over HTTP."
+  description = "Port the backend answers on over HTTP; the backend module's origin_port output."
   type        = number
-  default     = 8080
 }
 
 variable "domain" {
