@@ -11,6 +11,7 @@ The Spring Boot backend on one spot Graviton instance, kept running by an Auto S
 - **Always the latest AMI.** The launch template names Amazon Linux 2023 for arm64 through its public SSM parameter, which EC2 resolves at each launch, so a replacement boots a patched system and a new AMI is not a Terraform change.
 - **Deploys** push an immutable tag to ECR, write it to the SSM parameter and start an instance refresh, which replaces the instance: a few minutes without the backend, accepted with a single instance. Terraform creates the parameter with `none` and never changes it again. ECR keeps the last ten images.
 - **Logs** go from Docker to CloudWatch, one stream per instance, kept 14 days.
+- **Known limitation:** without a load balancer the group watches only EC2's status checks. A backend that never answers its health check keeps its instance, without the Elastic IP, until someone looks; the observability module adds the alarm.
 
 ```hcl
 module "backend" {

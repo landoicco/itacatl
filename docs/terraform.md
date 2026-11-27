@@ -19,7 +19,8 @@ infra/
 │   ├── network/        # VPC, subnets, routes
 │   │   ├── README.md   # what it is for, plus generated inputs and outputs
 │   │   └── tests/
-│   └── database/       # RDS PostgreSQL
+│   ├── database/       # RDS PostgreSQL
+│   └── backend/        # ECR, the spot Auto Scaling group, its IAM role and Elastic IP
 └── envs/
     └── prod/           # stack: every module wired together
         ├── main.tf
@@ -33,7 +34,7 @@ A **module** is a reusable piece with inputs and outputs and no state; a stack i
 
 ## The toolchain
 
-Terraform, TFLint and terraform-docs come from the [Nix flake](../flake.nix): the default shell (`nix develop`) has them with the rest of the toolchain, and the `infra` shell (`nix develop .#infra`) has only them, for CI.
+Terraform, TFLint, terraform-docs and Trivy come from the [Nix flake](../flake.nix): the default shell (`nix develop`) has them with the rest of the toolchain, and the `infra` shell (`nix develop .#infra`) has only them, for CI.
 
 - **One copy of the AWS provider.** Every directory that runs `init` (each stack and each module, for its tests) would download its own copy of the AWS provider, about 770 MB unpacked: six modules and two stacks would take 6 GB of identical files. Both shells set `TF_PLUGIN_CACHE_DIR` to `~/.cache/terraform/plugins`, so the provider is downloaded once and each `.terraform/` only links to it. The lock files still check its checksums, so the cache cannot slip in a different binary. In CI the job downloads the provider once instead of once per directory. Two caveats: a `.terraform/` initialized before the cache existed keeps its own full copy until it is deleted and `init` runs again; and Terraform does not make the cache safe for concurrent use, so `init` runs in one directory at a time, never in parallel loops or terminals.
 
@@ -66,9 +67,10 @@ The `Terraform` job in CI runs these on every pull request, through the flake's 
 | Validation | `terraform -chdir=<dir> init -backend=false`, then `validate` | Syntax, types, references, provider schema |
 | Lint | `tflint --recursive` | Deprecated syntax, unused declarations, missing types and versions |
 | Module docs | `terraform-docs --output-check .` | A module README whose inputs and outputs tables no longer match the code (`terraform-docs .` regenerates them) |
+| Security scan | `trivy config --exit-code 1 .` | Misconfigurations, of every severity: a public resource, a missing encryption, an open port ([accepted findings](#accepted-trivy-findings)) |
 | Tests | `terraform -chdir=<dir> test` | The properties that must hold, below |
 
-`<dir>` is each stack and each module: `bootstrap`, `modules/network`, `modules/database`, `envs/prod`. `init -backend=false` downloads the providers but never touches a backend, so it needs no bucket and no credentials. It writes `.terraform/`, which is git-ignored and only links to the shared plugin cache, and `.terraform.lock.hcl`, which is committed in every directory, modules included, so their tests run against the same provider version as CI.
+`<dir>` is each stack and each module: `bootstrap`, `modules/network`, `modules/database`, `modules/backend`, `envs/prod`. `init -backend=false` downloads the providers but never touches a backend, so it needs no bucket and no credentials. It writes `.terraform/`, which is git-ignored and only links to the shared plugin cache, and `.terraform.lock.hcl`, which is committed in every directory, modules included, so their tests run against the same provider version as CI.
 
 ### Tests with a mocked provider
 
@@ -91,8 +93,8 @@ run "plain_http_is_denied" {
 ```
 
 - **They test intent, not AWS.** A mock cannot tell whether AWS would accept a setting; it proves that the code asks for what it should: a private, versioned, encrypted bucket. `validate` covers the provider's schema.
-- **Values a test needs are overridden.** `override_data` gives `aws_caller_identity` a fixed account ID, so the bucket name can be asserted.
-- **Data sources are mocked too.** The bucket policy is built with `jsonencode` instead of the `aws_iam_policy_document` data source, whose JSON a mock would make up.
+- **Values a test needs are overridden.** `override_data` gives `aws_caller_identity` a fixed account ID, so the bucket name can be asserted. Where the code builds ARNs, `mock_data` inside the `mock_provider` block fixes the partition, region and account for the whole file: the provider rejects an ARN made of the mock's random strings. `override_resource` fills in what AWS would create on its own and a mock does not, such as the master secret RDS makes for the database.
+- **Data sources are mocked too.** Policies are built with `jsonencode` instead of the `aws_iam_policy_document` data source, whose JSON a mock would make up.
 - **`command = plan`.** A `run` applies by default, and the test then destroys what it applied; `prevent_destroy` would make that cleanup fail. Plans are enough to read the configuration. The exception is a check that compares IDs, such as which route table a subnet uses: they are unknown in a plan, so that `run` applies against the mock, which creates nothing, in a module without `prevent_destroy`.
 
 | Test file | What it proves |
@@ -100,9 +102,26 @@ run "plain_http_is_denied" {
 | `bootstrap/tests/state.tftest.hcl` | Bucket named per account, versioned, encrypted, never public, TLS only; old versions expire but the newest are kept; retention must be positive; a project name S3 would reject fails at plan time |
 | `modules/network/tests/network.tftest.hcl` | Public and private subnets in two zones with non-overlapping ranges; each subnet uses its own route table, and only the public one has a route, to the internet gateway; no subnet hands out public IPs; the default security group allows nothing; DNS is on; one zone, more zones than the region has, a VPC smaller than /20, an IPv6 range or one with host bits set is rejected |
 | `modules/database/tests/database.tftest.hcl` | The database is private, single-AZ and only in the subnets it is given; storage encrypted, seven days of backups, deletion protection on, and a destroy leaves a final snapshot with a unique name, also when the protection is lifted; RDS manages the master password and IAM sign-in is on; TLS is required, with a parameter group matching the engine; its security group has no rules; one subnet, or backups turned off, is rejected |
-| `envs/prod/tests/prod.tftest.hcl` | How prod wires the modules: they are named `<project>-prod`; the database sits in the network's private subnets; a project name S3 would reject fails at plan time |
+| `modules/backend/tests/backend.tftest.hcl` | One spot instance, never on-demand, chosen by price and capacity, with capacity rebalancing, of any of the types in any of the subnets; IMDSv2 with two hops, an encrypted root volume, the latest arm64 AMI resolved at launch, standard CPU credits; only CloudFront reaches it, on 8080; it reaches only the database and HTTPS, and the database admits it; every permission names its resource, `rds-db:connect` only as `itacatl_app`, only the master secret; the user data runs the image with the `aws` profile and takes the Elastic IP; immutable, scanned images, ten kept; logs kept 14 days; one subnet, one instance type or an x86 type is rejected |
+| `envs/prod/tests/prod.tftest.hcl` | How prod wires the modules: they are named `<project>-prod`; the database sits in the network's private subnets and the backend in its public ones; a project name S3 would reject fails at plan time |
 
 Each module tests its own properties; a stack's tests only check how it joins the modules, so a property is asserted once.
+
+### Accepted Trivy findings
+
+Trivy reports every severity, and CI fails on any finding. One that is accepted on purpose is ignored inline, in a `#trivy:ignore:<ID> <reason>` comment right above the resource, so the reason sits next to the code and a new finding still fails. They all come from the [cost rules](infra-plan.md#cost-rules):
+
+| Finding | Where | Why it is accepted |
+|---|---|---|
+| `AVD-AWS-0089`, S3 access logging | `bootstrap`, the state bucket | It needs a second bucket; only Terraform, run by the maintainer, reads this one |
+| `AVD-AWS-0132`, S3 without a customer-managed key | `bootstrap`, the state bucket | A key bills $1/month and protects nothing more here: only the account's principals can read the bucket |
+| `AVD-AWS-0178`, VPC without flow logs | `network` | CloudWatch bills each GB they ingest; decided with the observability module |
+| `AVD-AWS-0133`, RDS without Performance Insights | `database` | Database monitoring is decided with the observability module |
+| `AVD-AWS-0033`, ECR without a customer-managed key | `backend` | A key bills monthly; ECR encrypts the images with its own |
+| `AVD-AWS-0017`, a log group without a customer-managed key | `backend` | The same; CloudWatch encrypts the logs with its own |
+| `AVD-AWS-0104`, egress to any address | `backend` | HTTPS to AWS's public endpoints, whose addresses are not fixed; without a NAT gateway or VPC endpoints they are reached over the internet |
+
+Accepting a new one takes a reason that names what it would cost or why it does not apply, and a row here.
 
 ## Modules
 
@@ -114,6 +133,7 @@ Each module tests its own properties; a stack's tests only check how it joins th
 |---|---|
 | [`network`](../infra/modules/network/README.md) | VPC over two zones; public subnets for the backend, private ones for the database with no route out; no NAT gateway; the default security group emptied |
 | [`database`](../infra/modules/database/README.md) | RDS PostgreSQL 18, single-AZ, in the private subnets; master password in Secrets Manager, IAM sign-in for the application, TLS required; encrypted, backed up, protected from deletion, with a final snapshot; a security group that clients add their rules to |
+| [`backend`](../infra/modules/backend/README.md) | ECR; one spot Graviton instance in an Auto Scaling group, in the public subnets; an Elastic IP as CloudFront's origin; a security group open only to CloudFront, and the database's rule for it; an IAM role with one resource per permission; the image tag in SSM; logs in CloudWatch |
 
 Each module's README ends with what to confirm on the first apply: what a mocked provider cannot check against AWS.
 
@@ -143,7 +163,39 @@ Nothing in AWS is created until this runbook is followed. It runs from the maint
    ```
    From then on the bootstrap reads its state from S3 like any stack. Commit `backend.tf`, which holds no account ID; `backend.hcl` stays out of git.
 
-The remaining steps (applying `envs/prod`, pushing the backend image) arrive with the modules of Phase 2.
+5. **Apply prod**, with the same bucket and region:
+   ```shell
+   cd ../envs/prod
+   cp ../../bootstrap/backend.hcl backend.hcl
+   terraform init -backend-config=backend.hcl
+   terraform apply
+   ```
+   The database takes about ten minutes. The backend's instance boots too, but its image tag is still `none`, so its container does not start until the first deploy; that is expected.
+6. **Deploy the backend**, as in [Deploying the backend](#deploying-the-backend).
+
+The remaining steps (the frontend, a smoke test through CloudFront) arrive with the modules of Phase 2.
+
+### Deploying the backend
+
+A deploy pushes an image, records its tag in SSM, and replaces the instance, which reads the tag when it boots. From `infra/envs/prod`, on a clean checkout of the commit to deploy:
+
+```shell
+repo=$(terraform output -raw backend_repository_url)
+tag=$(git rev-parse --short HEAD)
+aws ecr get-login-password | docker login --username AWS --password-stdin "${repo%%/*}"
+docker buildx build --platform linux/arm64 --tag "$repo:$tag" --push ../../../backend
+
+aws ssm put-parameter --overwrite \
+  --name "$(terraform output -raw backend_image_tag_parameter_name)" --value "$tag"
+aws autoscaling start-instance-refresh \
+  --auto-scaling-group-name "$(terraform output -raw backend_autoscaling_group_name)"
+```
+
+- **The image is arm64**, the Graviton instances' architecture. The Dockerfile compiles on the machine's own platform, so on an x86 machine only the final stage runs under emulation; Docker needs QEMU registered for arm64 (`docker run --privileged --rm tonistiigi/binfmt --install arm64`, or `boot.binfmt.emulatedSystems` on NixOS).
+- **Tags are immutable**: pushing the same commit twice fails, so a rebuild of the same code needs a new commit.
+- **A few minutes without the backend.** The refresh terminates the instance and launches another, which pulls the image, migrates and takes the Elastic IP once `/actuator/health` answers. `aws autoscaling describe-instance-refreshes --auto-scaling-group-name <name>` shows its progress; the app's logs are in the `/itacatl-prod/backend` log group.
+- **Rolling back** is the same two commands with an earlier tag still in ECR, which keeps the last ten. A migration is not rolled back, so a tag older than the database's schema may not start.
+- **Inside the instance:** Session Manager opens a shell (`aws ssm start-session --target <instance ID>`, with the Session Manager plugin). The boot's output is in `/var/log/cloud-init-output.log`.
 
 ### Destroying prod
 
@@ -154,7 +206,7 @@ terraform apply -var database_deletion_protection=false   # only lifts the prote
 terraform destroy
 ```
 
-The apply is needed because the protection is enforced by AWS, not by Terraform: a destroy only plans deletions, and RDS refuses to delete an instance that still has it on. Once the apply has turned it off, the destroy goes through. RDS then takes a final snapshot, named `itacatl-prod-final-<random suffix>`, and deletes the instance; its automated backups go with it. The snapshot stays, billed by the size of the data (cents for a small database), and the next database never restores from it on its own. List and delete old ones when they are no longer needed:
+The destroy also deletes the ECR repository with its images, which every commit can rebuild. The apply is needed because the protection is enforced by AWS, not by Terraform: a destroy only plans deletions, and RDS refuses to delete an instance that still has it on. Once the apply has turned it off, the destroy goes through. RDS then takes a final snapshot, named `itacatl-prod-final-<random suffix>`, and deletes the instance; its automated backups go with it. The snapshot stays, billed by the size of the data (cents for a small database), and the next database never restores from it on its own. List and delete old ones when they are no longer needed:
 
 ```shell
 aws rds describe-db-snapshots --snapshot-type manual --query 'DBSnapshots[].DBSnapshotIdentifier'

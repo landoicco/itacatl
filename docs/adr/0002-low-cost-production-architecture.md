@@ -21,4 +21,4 @@ Estimated at ~$25–27/month if left running, under a hard ceiling of $30 (see [
 
 - No high availability: a spot reclaim, a failure or a deploy causes a few minutes of downtime.
 - Deploys use ASG instance refresh: immutable, not zero-downtime.
-- The instance needs a public IPv4 address (~$4/month).
+- The instance needs a public IPv4 address (~$4/month). It is an Elastic IP, which each new instance takes, so CloudFront's origin does not change when the instance is replaced; it costs the same.

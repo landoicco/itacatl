@@ -30,7 +30,7 @@ flowchart LR
     sqs -.-> dlq[(DLQ)]
 ```
 
-- **Backend:** an Auto Scaling group of one instance, spot only, using a mixed instances policy (`price-capacity-optimized` across several 2 GB Graviton types, such as `t4g.small`, `c6g.medium` and `c7g.medium`, in both zones) and capacity rebalancing. The ASG replaces the instance when it is reclaimed or fails. There is no on-demand fallback: listing several types and zones makes it rare for none of them to have spot capacity, and when that happens only the backend stops, while the database and its data are unaffected. 2 GB is the smallest size that fits the JVM, Docker and the SSM agent; a 1 GB `t4g.micro` would save about $2/month at the cost of out-of-memory restarts. The instance runs the backend image with Docker; the database never runs on it.
+- **Backend:** an Auto Scaling group of one instance, spot only, using a mixed instances policy (`price-capacity-optimized` across several 2 GB Graviton types, such as `t4g.small`, `c6g.medium` and `c7g.medium`, in both zones) and capacity rebalancing. The ASG replaces the instance when it is reclaimed or fails. There is no on-demand fallback: listing several types and zones makes it rare for none of them to have spot capacity, and when that happens only the backend stops, while the database and its data are unaffected. 2 GB is the smallest size that fits the JVM, Docker and the SSM agent; a 1 GB `t4g.micro` would save about $2/month at the cost of out-of-memory restarts. The instance runs the backend image with Docker; the database never runs on it. CloudFront's origin is an Elastic IP, since every new instance has a new public IP: each instance takes it once the app answers its health check, at the price of the public IPv4 address it would have anyway.
 - **Database:** RDS PostgreSQL (PostGIS as an extension), smallest Graviton class, single-AZ. It is the one component kept whole: automated backups, encrypted storage, deletion protection and a final snapshot when it is destroyed, since the data is the only thing the ASG cannot rebuild. The master password is managed by RDS in Secrets Manager. The master user owns the tables and runs Flyway; the backend connects as `itacatl_app`, a role subject to Row-Level Security, which the backend itself creates before migrating ([how the role is created](tenant-isolation.md#how-the-role-is-created)). It signs in with IAM database authentication: a short-lived token from the instance's IAM role, so the runtime holds no database password.
 - **Frontend:** static build in S3, served by CloudFront. Same origin for the app and `/api`, so no CORS in AWS.
 - **Notifications:** the backend publishes to SQS; a Lambda outside the VPC sends the WhatsApp messages. Reservations stay synchronous, because they must check stock before confirming.
@@ -174,18 +174,18 @@ One PR per module, in this order; each joins `envs/prod` in the same PR, so the 
 - [x] Add `terraform-docs` to `flake.nix`, with a plugin cache shared by every directory
 - [x] `network` module, and `envs/prod` wiring it
 - [x] `database` module, and the runbook's destroy steps
-- [ ] `backend` module; add `trivy` to `flake.nix`, now that there are resources worth scanning
+- [x] `backend` module; add `trivy` to `flake.nix`, now that there are resources worth scanning
 - [ ] `frontend` module
 - [ ] `observability` module
-- [ ] The application's `aws` profile: database access through IAM, configuration from SSM and Secrets Manager
-- [ ] The runbook's remaining steps: applying `envs/prod`, pushing the backend image to ECR, a smoke test, the destroy, and the first-apply checks
+- [x] The application's `aws` profile: database access through IAM, configuration from SSM and Secrets Manager (so far only the image tag and the master secret; SecureString parameters join when a secret other than the database's appears)
+- [ ] The runbook's remaining steps: a smoke test and the first-apply checks (applying `envs/prod`, deploying the backend and the destroy are written)
 - [ ] `notifications` module, postponed until slices 5 and 6 need it
 
 **Done when:** each module PR meets the [definition of done](#each-module-pr).
 
 ### Phase 3: CI
 - [x] `fmt`, `tflint`, `validate` and `terraform test` on PRs, with no AWS credentials, through the flake's `infra` shell (brought forward to Phase 1)
-- [ ] `trivy` on PRs
+- [x] `trivy` on PRs (brought forward to the `backend` module)
 - [ ] Add `infracost` to `flake.nix` (free API key, kept out of the repository) and run it on PRs
 - [ ] Build the backend image for arm64 too
 

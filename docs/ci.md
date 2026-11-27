@@ -23,7 +23,7 @@ The `Backend`, `Frontend` and `Terraform` jobs take their tools from the flake i
 |---|---|---|
 | `.#backend` | JDK 21, Maven | `Backend` |
 | `.#frontend` | Node.js 22 | `Frontend` |
-| `.#infra` | Terraform, TFLint, terraform-docs | `Terraform` |
+| `.#infra` | Terraform, TFLint, terraform-docs, Trivy | `Terraform` |
 
 **Why:** `flake.lock` already pins every tool for the dev shell. Setup actions would pin them a second time in the workflow, and the two copies drift apart: CI would test with a JDK or Node patch the developers don't use. With the flake, "it passes in `nix develop`" means it passes in CI.
 
