@@ -17,22 +17,32 @@
         };
         terraform = import ./nix/terraform.nix { inherit pkgs system; };
 
-        # What infra/ needs; also its own shell, so CI downloads only this
+        # Each part of the repo also gets its own shell, so a CI job downloads only what it needs
+        backendTools = with pkgs; [
+          jdk21_headless # backend build and Spotless
+          maven
+        ];
+        frontendTools = with pkgs; [
+          nodejs_22      # frontend build, lint and Prettier
+        ];
         infraTools = [
           terraform      # HashiCorp's binary (nix/terraform.nix)
           pkgs.tflint    # Terraform linter
         ];
 
-        # The project's tools. Add new ones here, e.g. with pkgs; [ nodejs python3 ]
-        tools = with pkgs; [
-          jdk21_headless # backend build and Spotless
-          maven
-          nodejs_22      # frontend build, lint and Prettier
-          gh             # PRs and CI from the terminal; credential helper for git push
-        ] ++ infraTools;
+        # The project's tools. Add new ones to the list of the part that needs them, or here
+        tools = backendTools ++ frontendTools ++ infraTools ++ [
+          pkgs.gh        # PRs and CI from the terminal; credential helper for git push
+        ];
       in
       {
-        # nix develop .#infra (the Terraform job in CI)
+        # nix develop .#backend, .#frontend, .#infra (the CI jobs)
+        devShells.backend = pkgs.mkShell {
+          packages = backendTools;
+        };
+        devShells.frontend = pkgs.mkShell {
+          packages = frontendTools;
+        };
         devShells.infra = pkgs.mkShell {
           packages = infraTools;
         };
