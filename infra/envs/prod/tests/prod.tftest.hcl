@@ -10,11 +10,25 @@ override_data {
   }
 }
 
-run "network_spans_two_zones" {
+run "resources_are_named_after_the_project_and_env" {
   command = plan
 
-  assert {
-    condition     = module.network.availability_zones == tolist(["us-east-1a", "us-east-1b"])
-    error_message = "Prod must spread its subnets over two availability zones."
+  variables {
+    project = "demo"
   }
+
+  assert {
+    condition     = local.name == "demo-prod"
+    error_message = "Every module must be named <project>-prod."
+  }
+}
+
+run "an_invalid_project_name_is_rejected" {
+  command = plan
+
+  variables {
+    project = "Itacatl_Prod"
+  }
+
+  expect_failures = [var.project]
 }

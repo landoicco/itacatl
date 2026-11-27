@@ -34,7 +34,7 @@ A **module** is a reusable piece with inputs and outputs and no state; a stack i
 
 Terraform, TFLint and terraform-docs come from the [Nix flake](../flake.nix): the default shell (`nix develop`) has them with the rest of the toolchain, and the `infra` shell (`nix develop .#infra`) has only them, for CI.
 
-- **One copy of the AWS provider.** Every directory that runs `init` (each stack and each module, for its tests) would download its own copy of the AWS provider, about 770 MB unpacked: six modules and two stacks would take 6 GB of identical files. Both shells set `TF_PLUGIN_CACHE_DIR` to `~/.cache/terraform/plugins`, so the provider is downloaded once and each `.terraform/` only links to it. The lock files still check its checksums, so the cache cannot slip in a different binary. In CI the job downloads the provider once instead of once per directory.
+- **One copy of the AWS provider.** Every directory that runs `init` (each stack and each module, for its tests) would download its own copy of the AWS provider, about 770 MB unpacked: six modules and two stacks would take 6 GB of identical files. Both shells set `TF_PLUGIN_CACHE_DIR` to `~/.cache/terraform/plugins`, so the provider is downloaded once and each `.terraform/` only links to it. The lock files still check its checksums, so the cache cannot slip in a different binary. In CI the job downloads the provider once instead of once per directory. Two caveats: a `.terraform/` initialized before the cache existed keeps its own full copy until it is deleted and `init` runs again; and Terraform does not make the cache safe for concurrent use, so `init` runs in one directory at a time, never in parallel loops or terminals.
 
 - **Terraform is HashiCorp's release binary**, defined in `nix/terraform.nix`: the zip from `releases.hashicorp.com`, pinned by version and by the SHA-256 HashiCorp publishes for each platform. nixpkgs also packages Terraform, but the public Nix cache never builds unfree packages, so every machine would compile it from source. Upgrading means changing the version and copying the four hashes from that release's `SHA256SUMS`.
 - **Its license is declared.** Since 1.6 Terraform is under the Business Source License, which Nix counts as unfree. `nix/terraform.nix` says so (`meta.license`), and the flake allows that one package by name (`allowUnfreePredicate`), so accepting it is a visible decision. The BSL only restricts offering a product that competes with HashiCorp's.
@@ -92,13 +92,13 @@ run "plain_http_is_denied" {
 - **They test intent, not AWS.** A mock cannot tell whether AWS would accept a setting; it proves that the code asks for what it should: a private, versioned, encrypted bucket. `validate` covers the provider's schema.
 - **Values a test needs are overridden.** `override_data` gives `aws_caller_identity` a fixed account ID, so the bucket name can be asserted.
 - **Data sources are mocked too.** The bucket policy is built with `jsonencode` instead of the `aws_iam_policy_document` data source, whose JSON a mock would make up.
-- **`command = plan`.** A `run` applies by default, and the test then destroys what it applied; `prevent_destroy` would make that cleanup fail. Plans are enough to read the configuration.
+- **`command = plan`.** A `run` applies by default, and the test then destroys what it applied; `prevent_destroy` would make that cleanup fail. Plans are enough to read the configuration. The exception is a check that compares IDs, such as which route table a subnet uses: they are unknown in a plan, so that `run` applies against the mock, which creates nothing, in a module without `prevent_destroy`.
 
 | Test file | What it proves |
 |---|---|
 | `bootstrap/tests/state.tftest.hcl` | Bucket named per account, versioned, encrypted, never public, TLS only; old versions expire but the newest are kept; retention must be positive; a project name S3 would reject fails at plan time |
-| `modules/network/tests/network.tftest.hcl` | Public and private subnets in two zones with non-overlapping ranges; only the public route table reaches the internet, the private one has no routes; no subnet hands out public IPs; the default security group allows nothing; DNS is on; one zone or a VPC smaller than /20 is rejected |
-| `envs/prod/tests/prod.tftest.hcl` | How prod wires the modules: the network spans two zones |
+| `modules/network/tests/network.tftest.hcl` | Public and private subnets in two zones with non-overlapping ranges; each subnet uses its own route table, and only the public one has a route, to the internet gateway; no subnet hands out public IPs; the default security group allows nothing; DNS is on; one zone, more zones than the region has, a VPC smaller than /20, an IPv6 range or one with host bits set is rejected |
+| `envs/prod/tests/prod.tftest.hcl` | How prod wires the modules: they are named `<project>-prod`; a project name S3 would reject fails at plan time |
 
 Each module tests its own properties; a stack's tests only check how it joins the modules, so a property is asserted once.
 

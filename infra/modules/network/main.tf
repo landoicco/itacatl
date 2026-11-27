@@ -2,9 +2,21 @@
 data "aws_availability_zones" "available" {
   state = "available"
 
+  # Zone names map to different physical zones in each account, so the zone is excluded by ID.
+  # use1-az3 is an older us-east-1 zone without the newer instance types, Graviton ones included,
+  # so the backend's spot instances and the database could not be placed in it.
+  exclude_zone_ids = ["use1-az3"]
+
   filter {
     name   = "opt-in-status"
     values = ["opt-in-not-required"]
+  }
+
+  lifecycle {
+    postcondition {
+      condition     = length(self.names) >= var.az_count
+      error_message = "The region has fewer usable availability zones than az_count."
+    }
   }
 }
 

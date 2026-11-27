@@ -5,6 +5,7 @@ The VPC every other module runs in: public and private subnets spread over two a
 - **Public subnets** hold the backend instance. Its security group only admits CloudFront, and it gets a public IP from its launch template, never from the subnet.
 - **Private subnets** hold the database. Their route table has only the local route, so nothing in them can reach the internet or be reached from it.
 - **The default security group has no rules**, so a resource created without one of its own gets no access.
+- **Zones are standard ones, never `use1-az3`.** That older `us-east-1` zone lacks the newer instance types, Graviton included. It is excluded by zone ID, because each account maps zone names (`us-east-1a`) to physical zones differently.
 
 Why there is no NAT gateway, load balancer or VPC endpoint is in the [infra plan's cost rules](../../../docs/infra-plan.md#cost-rules).
 

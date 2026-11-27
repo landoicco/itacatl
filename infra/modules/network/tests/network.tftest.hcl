@@ -39,17 +39,39 @@ run "subnet_ranges_do_not_overlap" {
   }
 }
 
+# Applied against the mock, because the IDs that tie subnets, route tables and the internet
+# gateway together are unknown in a plan. The mock only invents IDs, so neither the apply nor the
+# cleanup after it calls AWS.
 run "only_public_subnets_reach_the_internet" {
-  command = plan
+  command = apply
 
   assert {
-    condition     = [for route in aws_route_table.public.route : route.cidr_block] == ["0.0.0.0/0"]
+    condition = (
+      [for route in aws_route_table.public.route : route.cidr_block] == ["0.0.0.0/0"] &&
+      one(aws_route_table.public.route).gateway_id == aws_internet_gateway.this.id
+    )
     error_message = "The public route table must have a single default route, to the internet gateway."
   }
 
   assert {
     condition     = length(aws_route_table.private.route) == 0
     error_message = "The private route table must have no routes besides the implicit local one: no way out to the internet."
+  }
+
+  assert {
+    condition = (
+      aws_route_table_association.public[*].subnet_id == aws_subnet.public[*].id &&
+      alltrue([for association in aws_route_table_association.public : association.route_table_id == aws_route_table.public.id])
+    )
+    error_message = "Every public subnet must use the public route table."
+  }
+
+  assert {
+    condition = (
+      aws_route_table_association.private[*].subnet_id == aws_subnet.private[*].id &&
+      alltrue([for association in aws_route_table_association.private : association.route_table_id == aws_route_table.private.id])
+    )
+    error_message = "Every private subnet must use the private route table."
   }
 }
 
@@ -98,4 +120,34 @@ run "too_small_a_vpc_is_rejected" {
   }
 
   expect_failures = [var.cidr_block]
+}
+
+run "an_ipv6_range_is_rejected" {
+  command = plan
+
+  variables {
+    cidr_block = "fd00::/18"
+  }
+
+  expect_failures = [var.cidr_block]
+}
+
+run "a_range_with_host_bits_is_rejected" {
+  command = plan
+
+  variables {
+    cidr_block = "10.0.1.0/16"
+  }
+
+  expect_failures = [var.cidr_block]
+}
+
+run "more_zones_than_the_region_has_are_rejected" {
+  command = plan
+
+  variables {
+    az_count = 4
+  }
+
+  expect_failures = [data.aws_availability_zones.available]
 }
