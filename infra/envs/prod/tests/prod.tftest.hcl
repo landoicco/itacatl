@@ -1,17 +1,9 @@
 # Runs against a mocked AWS provider: no credentials, no account, nothing created.
 # The modules test their own properties; these check how prod wires them together.
 
-# The mock's random strings would make invalid ARNs, which the provider rejects.
+# Fixed partition, region and account, so the ARNs the modules build are valid.
 mock_provider "aws" {
-  mock_data "aws_partition" {
-    defaults = { partition = "aws" }
-  }
-  mock_data "aws_region" {
-    defaults = { region = "us-east-1" }
-  }
-  mock_data "aws_caller_identity" {
-    defaults = { account_id = "111111111111" }
-  }
+  source = "../../testing/aws"
 }
 
 override_data {

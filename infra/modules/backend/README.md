@@ -3,15 +3,18 @@
 The Spring Boot backend on one spot Graviton instance, kept running by an Auto Scaling group, and the ECR repository its image comes from ([architecture](../../../docs/infra-plan.md#architecture)).
 
 - **Spot only, one instance.** A mixed instances policy offers several 2 GB Graviton types in both public subnets, chosen by price and capacity. Capacity rebalancing launches a replacement when AWS recommends it, before the two-minute notice. There is no on-demand fallback ([cost rules](../../../docs/infra-plan.md#cost-rules)).
-- **A stable origin for CloudFront.** Every instance gets a new public IP, so the module keeps an Elastic IP that each new instance takes for itself once the app answers its health check. A replacement launched while the old instance still runs takes the traffic only when it can serve it. The address costs the same as the public IPv4 an instance would have anyway.
+- **A stable origin for CloudFront.** Every instance gets a new public IP, so the module keeps an Elastic IP that each new instance takes for itself once the app answers its health check. The address costs the same as the public IPv4 an instance would have anyway.
+- **In service only when ready.** Without a load balancer, the group would count an instance in service as soon as EC2 says it is running, minutes before the app answers. A launch lifecycle hook holds each new instance pending until its user data reports that the app answers and the address is taken. Only then does capacity rebalancing terminate the old instance, so a replacement takes the traffic only when it can serve it. A failed step, or no report within 15 minutes, abandons the instance, and the group launches another.
 - **Reachable only from CloudFront.** The security group admits CloudFront's origin-facing prefix list on 8080, and nothing else: no SSH, since Session Manager opens a shell through the instance's role. It starts connections only to the database (5432, the module adds the database's ingress rule too) and to HTTPS, where AWS's APIs are; without a NAT gateway or VPC endpoints they are reached over the internet.
 - **No secret on the instance.** The user data passes only names and addresses. The app reads the master user's credentials from Secrets Manager to migrate, and signs in as `itacatl_app` with an IAM token; the role allows `rds-db:connect` for that user only.
-- **Each permission names its resource.** Only ECR's sign-in applies to every resource, as AWS requires. The instance may associate the Elastic IP only with instances that carry its own profile.
+- **Each permission names its resource.** Only ECR's sign-in applies to every resource, as AWS requires. The instance may associate the Elastic IP only with instances that carry its own profile, and report only to its own group's hook.
 - **Hardened instance:** IMDSv2 only, with a hop limit of 2 because the container is one hop further away; an encrypted root volume; T instances in standard credit mode, which throttles instead of billing CPU above the baseline.
 - **Always the latest AMI.** The launch template names Amazon Linux 2023 for arm64 through its public SSM parameter, which EC2 resolves at each launch, so a replacement boots a patched system and a new AMI is not a Terraform change.
-- **Deploys** push an immutable tag to ECR, write it to the SSM parameter and start an instance refresh, which replaces the instance: a few minutes without the backend, accepted with a single instance. Terraform creates the parameter with `none` and never changes it again. ECR keeps the last ten images.
+- **Deploys** push an immutable tag to ECR, write it to the SSM parameter and start an instance refresh, which replaces the instance: a few minutes without the backend, accepted with a single instance. Terraform creates the parameter with `none` and never changes it again; with `none`, an instance goes into service without the app, so the first apply does not keep replacing it. ECR keeps the last ten tagged images, counted apart from untagged ones, which go after a week.
 - **Logs** go from Docker to CloudWatch, one stream per instance, kept 14 days.
-- **Known limitation:** without a load balancer the group watches only EC2's status checks. A backend that never answers its health check keeps its instance, without the Elastic IP, until someone looks; the observability module adds the alarm.
+- **Known limitations:**
+  - An image that never becomes healthy is abandoned again on every instance, about every ten minutes, until a deploy writes a working tag. Each attempt costs only minutes of spot.
+  - Once in service, only EC2's status checks are watched: an app that stops answering later keeps its instance, and Docker's restart policy is its only recovery. The observability module adds the alarm.
 
 ```hcl
 module "backend" {
@@ -40,10 +43,12 @@ Each is ignored inline, next to the resource, with its reason:
 
 A mocked provider cannot check these against AWS; confirm them on the first apply:
 
-- The instance boots with the tag `none`, so its container fails to start until the first deploy; this is expected ([runbook](../../../docs/terraform.md)).
+- The instance boots with the tag `none` and goes into service without the app until the first deploy; this is expected ([runbook](../../../docs/terraform.md#first-deploy)).
+- On the first deploy, the group's activity history shows the new instance waiting on the `app-ready` hook and then going into service; `complete-lifecycle-action` and `associate-address` succeed with the role's permissions.
 - `t4g.small`, `c6g.medium` and `c7g.medium` are offered as spot in both zones, and the group accepts `credit_specification` with the types that are not burstable.
 - The 8 GB root volume is at least the AMI's snapshot size.
 - The instance appears in Session Manager, and `/var/log/cloud-init-output.log` shows the container started and the address associated.
+- The image pushed with `--provenance=false` is a single manifest, so ECR shows one tagged image per deploy and nothing untagged.
 - The ECR pull works with `ecr:BatchGetImage` and `ecr:GetDownloadUrlForLayer` alone.
 - The app migrates and signs in as `itacatl_app` (its logs in CloudWatch), and the Elastic IP's DNS name answers `/actuator/health` from CloudFront.
 

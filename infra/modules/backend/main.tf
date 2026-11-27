@@ -5,6 +5,11 @@ locals {
   database_port     = 5432
   app_port          = 8080
 
+  # Known before the group exists, because the launch template's user data names them and the
+  # group depends on the launch template.
+  autoscaling_group_name = "${var.name}-backend"
+  lifecycle_hook_name    = "app-ready"
+
   account_id = data.aws_caller_identity.current.account_id
   partition  = data.aws_partition.current.partition
   region     = data.aws_region.current.region
@@ -40,17 +45,33 @@ resource "aws_ecr_repository" "this" {
 resource "aws_ecr_lifecycle_policy" "this" {
   repository = aws_ecr_repository.this.name
 
+  # Tagged images are counted apart from untagged ones, so leftovers such as a build's attestation
+  # never push a deployable tag out of the count.
   policy = jsonencode({
-    rules = [{
-      rulePriority = 1
-      description  = "Keep the last ${var.image_retention_count} images"
-      selection = {
-        tagStatus   = "any"
-        countType   = "imageCountMoreThan"
-        countNumber = var.image_retention_count
-      }
-      action = { type = "expire" }
-    }]
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Delete untagged images after a week"
+        selection = {
+          tagStatus   = "untagged"
+          countType   = "sinceImagePushed"
+          countUnit   = "days"
+          countNumber = 7
+        }
+        action = { type = "expire" }
+      },
+      {
+        rulePriority = 2
+        description  = "Keep the last ${var.image_retention_count} tagged images"
+        selection = {
+          tagStatus      = "tagged"
+          tagPatternList = ["*"]
+          countType      = "imageCountMoreThan"
+          countNumber    = var.image_retention_count
+        }
+        action = { type = "expire" }
+      },
+    ]
   })
 }
 
@@ -210,17 +231,25 @@ resource "aws_iam_role_policy" "this" {
       },
       {
         # The instance takes the address for itself; the condition limits it to instances that
-        # carry this role, so it cannot move the address anywhere else.
+        # carry this role, so it cannot move the address anywhere else. EC2 may also authorize
+        # the call against the instance's network interface, which has no such key.
         Sid    = "TakeTheAddress"
         Effect = "Allow"
         Action = "ec2:AssociateAddress"
         Resource = [
           "arn:${local.partition}:ec2:${local.region}:${local.account_id}:elastic-ip/${aws_eip.this.allocation_id}",
           "arn:${local.partition}:ec2:${local.region}:${local.account_id}:instance/*",
+          "arn:${local.partition}:ec2:${local.region}:${local.account_id}:network-interface/*",
         ]
         Condition = {
           ArnEqualsIfExists = { "ec2:InstanceProfile" = aws_iam_instance_profile.this.arn }
         }
+      },
+      {
+        Sid      = "ReportReadiness"
+        Effect   = "Allow"
+        Action   = "autoscaling:CompleteLifecycleAction"
+        Resource = "arn:${local.partition}:autoscaling:${local.region}:${local.account_id}:autoScalingGroup:*:autoScalingGroupName/${local.autoscaling_group_name}"
       },
     ]
   })
@@ -284,6 +313,8 @@ resource "aws_launch_template" "this" {
     image_tag_parameter = aws_ssm_parameter.image_tag.name
     log_group           = aws_cloudwatch_log_group.this.name
     allocation_id       = aws_eip.this.allocation_id
+    autoscaling_group   = local.autoscaling_group_name
+    lifecycle_hook      = local.lifecycle_hook_name
     app_port            = local.app_port
     database_host       = var.database_address
     database_name       = var.database_name
@@ -304,15 +335,27 @@ resource "aws_launch_template" "this" {
 # One instance, spot only. When it is reclaimed or fails, the group launches another, of any of
 # the types, in any of the zones.
 resource "aws_autoscaling_group" "this" {
-  name                = "${var.name}-backend"
+  name                = local.autoscaling_group_name
   min_size            = 1
   max_size            = 1
   desired_capacity    = 1
   vpc_zone_identifier = var.subnet_ids
-  # No load balancer: the group replaces instances that fail EC2's status checks.
+  # No load balancer: once in service, the group replaces instances that fail EC2's status checks.
   health_check_type = "EC2"
   # On AWS's rebalance recommendation, launch the replacement before the two-minute notice.
   capacity_rebalance = true
+
+  # A new instance stays pending until its user data reports the app answering and the address
+  # taken; only then is it in service, and only then does rebalancing terminate the old one.
+  # Without a report in 15 minutes, or on a failure, the instance is abandoned: the group
+  # terminates it and launches another. Declared here, not as a separate resource, so it already
+  # holds for the group's first instance.
+  initial_lifecycle_hook {
+    name                 = local.lifecycle_hook_name
+    lifecycle_transition = "autoscaling:EC2_INSTANCE_LAUNCHING"
+    heartbeat_timeout    = 900
+    default_result       = "ABANDON"
+  }
 
   mixed_instances_policy {
     instances_distribution {

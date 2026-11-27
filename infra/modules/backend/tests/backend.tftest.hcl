@@ -1,16 +1,8 @@
 # Runs against a mocked AWS provider: no credentials, no account, nothing created.
 
-# The mock's random strings would make invalid ARNs, which the provider rejects.
+# Fixed partition, region and account, so the ARNs the module builds are valid.
 mock_provider "aws" {
-  mock_data "aws_partition" {
-    defaults = { partition = "aws" }
-  }
-  mock_data "aws_region" {
-    defaults = { region = "us-east-1" }
-  }
-  mock_data "aws_caller_identity" {
-    defaults = { account_id = "111111111111" }
-  }
+  source = "../../testing/aws"
 }
 
 variables {
@@ -52,6 +44,18 @@ run "one_spot_instance_and_never_on_demand" {
   assert {
     condition     = aws_autoscaling_group.this.capacity_rebalance
     error_message = "Capacity rebalancing must be on, so a replacement starts before the instance is reclaimed."
+  }
+}
+
+run "a_new_instance_serves_only_once_the_app_is_ready" {
+  command = plan
+
+  assert {
+    condition = anytrue([
+      for hook in aws_autoscaling_group.this.initial_lifecycle_hook :
+      hook.lifecycle_transition == "autoscaling:EC2_INSTANCE_LAUNCHING" && hook.default_result == "ABANDON"
+    ])
+    error_message = "A launch hook must hold each new instance until it reports ready, and abandon it otherwise."
   }
 }
 
@@ -175,9 +179,10 @@ run "the_instance_runs_the_app_with_the_aws_profile" {
         "DB_HOST=\"${var.database_address}\"",
         "DB_MASTER_SECRET_ARN=\"${var.database_master_user_secret_arn}\"",
         "--allocation-id \"${aws_eip.this.allocation_id}\"",
+        "--auto-scaling-group-name \"${aws_autoscaling_group.this.name}\"",
       ] : strcontains(base64decode(aws_launch_template.this.user_data), expected)
     ])
-    error_message = "The user data must run the image with the aws profile and the database's details, and take the Elastic IP."
+    error_message = "The user data must run the image with the aws profile and the database's details, take the Elastic IP, and report to this group's launch hook."
   }
 }
 
@@ -195,8 +200,19 @@ run "images_are_immutable_and_scanned" {
   }
 
   assert {
-    condition     = jsondecode(aws_ecr_lifecycle_policy.this.policy).rules[0].selection.countNumber == 10
-    error_message = "ECR must keep only the last ten images."
+    condition = anytrue([
+      for rule in jsondecode(aws_ecr_lifecycle_policy.this.policy).rules :
+      rule.selection.tagStatus == "tagged" && rule.selection.countType == "imageCountMoreThan" && rule.selection.countNumber == 10
+    ])
+    error_message = "ECR must keep the last ten tagged images, counted apart from untagged ones."
+  }
+
+  assert {
+    condition = alltrue([
+      for rule in jsondecode(aws_ecr_lifecycle_policy.this.policy).rules :
+      rule.selection.tagStatus != "any"
+    ])
+    error_message = "No rule may count tagged and untagged images together: leftovers would push deployable tags out."
   }
 }
 

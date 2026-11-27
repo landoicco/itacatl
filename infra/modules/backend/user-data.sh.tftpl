@@ -5,17 +5,33 @@ set -euo pipefail
 
 region="${region}"
 
-dnf install -y docker
-systemctl enable --now docker
-
 token=$(curl -fsS -X PUT http://169.254.169.254/latest/api/token \
   -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
 instance_id=$(curl -fsS -H "X-aws-ec2-metadata-token: $token" \
   http://169.254.169.254/latest/meta-data/instance-id)
 
-# The tag a deploy wrote; "none" until the first image is pushed
+# The group keeps the instance pending until this reports on its launch hook: CONTINUE puts it in
+# service, ABANDON has it terminated and replaced
+report() {
+  aws autoscaling complete-lifecycle-action --region "$region" \
+    --auto-scaling-group-name "${autoscaling_group}" --lifecycle-hook-name "${lifecycle_hook}" \
+    --instance-id "$instance_id" --lifecycle-action-result "$1"
+}
+# Any failed step abandons the instance at once, instead of waiting for the hook's timeout
+trap 'status=$?; if [ "$status" -ne 0 ]; then report ABANDON || true; fi' EXIT
+
+dnf install -y docker
+systemctl enable --now docker
+
+# The tag a deploy wrote. "none" until the first deploy: the instance goes into service without
+# the app, so the first apply does not replace it again and again
 tag=$(aws ssm get-parameter --region "$region" --name "${image_tag_parameter}" \
   --query Parameter.Value --output text)
+if [ "$tag" = none ]; then
+  echo "No image deployed yet; the first deploy replaces this instance"
+  report CONTINUE
+  exit 0
+fi
 
 aws ecr get-login-password --region "$region" |
   docker login --username AWS --password-stdin "${registry}"
@@ -37,17 +53,18 @@ docker run --detach --name backend --restart unless-stopped \
   --env DB_MASTER_SECRET_ARN="${master_secret_arn}" \
   "${repository_url}:$tag"
 
-# Take the address only once the app answers, so a replacement launched while the old instance
-# still runs does not take its traffic before it can serve it. Flyway runs before the app
-# answers, which can take a few minutes on a new database.
+# Take the address and go into service only once the app answers, so a replacement launched while
+# the old instance still runs takes its traffic only when it can serve it. Flyway runs before the
+# app answers, which can take a few minutes on a new database. Ten minutes, within the hook's 15.
 for _ in $(seq 60); do
   if curl -fsS "http://localhost:${app_port}/actuator/health" >/dev/null; then
     aws ec2 associate-address --region "$region" --allocation-id "${allocation_id}" \
       --instance-id "$instance_id" --allow-reassociation
+    report CONTINUE
     exit 0
   fi
   sleep 10
 done
 
-echo "The backend did not become healthy in 10 minutes; the address stays where it was" >&2
+echo "The backend did not become healthy in 10 minutes; abandoning the instance" >&2
 exit 1
