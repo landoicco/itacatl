@@ -6,7 +6,7 @@ Instructions for AI coding assistants working on this repository. They are tool-
 
 Portfolio project **itacatl**. Currently a simple e-commerce CRUD (Spring Boot + React + PostgreSQL), being reworked into a multi-tenant marketplace where small businesses such as *fondas* publish dynamic menus and customers reserve food for pickup. It is built to be deployed to AWS with Terraform.
 
-Read these before planning any feature or infrastructure work:
+Start with `docs/status.md`: where the work stands, what comes next, open decisions, deferred follow-ups and parked ideas. Then read these before planning any feature or infrastructure work:
 
 - `docs/product-spec.md`: product scope, domain rules, order flow.
 - `docs/infra-plan.md`: AWS architecture, cost rules, work phases.
@@ -58,7 +58,7 @@ Format every file you edit (`mvn spotless:apply`, `npm run format`, `terraform f
 ## Conventions
 
 - **Language:** everything committed (code, comments, docs, commit messages, PR descriptions) is in English.
-- **Docs in every PR:** each PR updates the docs it affects (README, `docs/`, ADRs), so `main` and its documentation never drift apart. A mechanism that gets added (a library, a pattern, a safety net) gets a guide in `docs/` explaining why it is there, how it is wired in and how to extend it. Ideas that were dropped are not documented.
+- **Docs in every PR:** each PR updates the docs it affects (README, `docs/`, ADRs), so `main` and its documentation never drift apart. A mechanism that gets added (a library, a pattern, a safety net) gets a guide in `docs/` explaining why it is there, how it is wired in and how to extend it. `docs/status.md` is updated too: what was done, what comes next, decisions taken or opened, follow-ups deferred. Ideas that were dropped are not documented; ideas set aside for later go to its parked list.
 - **Internationalization:** no user-facing text is hardcoded. UI strings go to the locale catalogs (`frontend/src/i18n/locales/`, every key in `en` and `es-MX`), API errors are codes the client translates, and formatting is locale-aware. See `docs/i18n.md`.
 - **Spring first:** prefer Spring's own tools (Security, Session, Data, Validation, Scheduling) over managed services, unless the service provides something Spring can't.
 - **Flyway:** until the first production deploy, migrations may be squashed into a clean baseline (ADR 0003); from then on, never edit an applied migration and add a new `V{n}__description.sql`.

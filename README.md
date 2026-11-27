@@ -215,6 +215,7 @@ gh release create v0.1.0 --title "v0.1.0" --notes-file release-desc-body.md
 
 | Document | Contents |
 |---|---|
+| [Project status](docs/status.md) | Where the work stands, what comes next, open decisions, deferred follow-ups, parked ideas |
 | [Product spec](docs/product-spec.md) | Scope, domain rules, order flow, rework roadmap |
 | [Domain model](docs/domain-model.md) | Tables, tenant integrity, time handling, read and management API, errors, sample data |
 | [Architecture](docs/architecture.md) | Backend and frontend layers, patterns, enforced dependency rules, tests |
