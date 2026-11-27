@@ -26,7 +26,7 @@ The goal is learning: every technical choice should be one the maintainer can de
 
 The toolchain is defined in `flake.nix` and entered with `nix develop`. It holds only what the project needs to build and run; AI assistants are not part of it, so each developer brings their own, or none.
 
-- When the project needs a tool (a language, a CLI, a database client), add it to the `tools` list in `flake.nix` instead of installing it globally, and say which one you added.
+- When the project needs a tool (a language, a CLI, a database client), add it to `flake.nix` instead of installing it globally, and say which one you added. A tool for one part of the repo goes in that part's list (`backendTools`, `frontendTools`, `infraTools`), so its CI job gets it too; anything else goes in `tools`.
 - Prefer packages from `nixpkgs`. Look a name up with `nix search nixpkgs <name>` before adding it.
 - After changing `flake.nix`, the shell must be re-entered (`exit`, then `nix develop`) for the tool to appear; tell the developer when that is needed.
 - `flake.lock` pins the versions: commit it together with `flake.nix`.
