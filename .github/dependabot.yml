@@ -18,7 +18,7 @@ updates:
     schedule:
       interval: weekly
     ignore:
-      # Types must match the Node version we run (see Runtime versions in the infra plan)
+      # Types must match the Node version we run (see Runtime versions in docs/ci.md)
       - dependency-name: "@types/node"
         update-types: [version-update:semver-major]
       # typescript-eslint 8 supports TypeScript <6.1 only, so npm ci fails on 7. Remove once

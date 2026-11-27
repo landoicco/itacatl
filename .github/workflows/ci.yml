@@ -32,12 +32,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Installs Nix only; packages come from the public cache.nixos.org
       - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
-      # Nix brings the tools, not the dependencies they download
+      # Nix brings the tools, not the dependencies they download. No restore-keys: a new pom.xml
+      # starts a fresh cache, so versions it no longer uses don't pile up
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.m2/repository
           key: maven-${{ runner.os }}-${{ hashFiles('backend/pom.xml') }}
-          restore-keys: maven-${{ runner.os }}-
       # Spotless check, compilation and tests; Testcontainers uses the runner's Docker
       - run: mvn -B verify
 
@@ -57,7 +57,6 @@ jobs:
         with:
           path: ~/.npm
           key: npm-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
-          restore-keys: npm-${{ runner.os }}-
       - run: npm ci
       - run: npm run format:check
       - run: npm run lint
@@ -70,18 +69,20 @@ jobs:
     name: Terraform
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    defaults:
+      run:
+        shell: nix develop .#infra -c bash --noprofile --norc -eo pipefail {0}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # Installs Nix only; packages come from the public cache.nixos.org
       - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
-      - run: nix develop .#infra -c terraform -chdir=infra fmt -check -recursive
-      - run: nix develop .#infra -c tflint --chdir=infra --recursive
+      - run: terraform -chdir=infra fmt -check -recursive
+      - run: tflint --chdir=infra --recursive
       # One block per stack
       - name: bootstrap
         run: |
-          nix develop .#infra -c terraform -chdir=infra/bootstrap init -backend=false -input=false
-          nix develop .#infra -c terraform -chdir=infra/bootstrap validate
-          nix develop .#infra -c terraform -chdir=infra/bootstrap test
+          terraform -chdir=infra/bootstrap init -backend=false -input=false
+          terraform -chdir=infra/bootstrap validate
+          terraform -chdir=infra/bootstrap test
 
   images:
     # Catches Dockerfile problems that the build tools alone do not see

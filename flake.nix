@@ -36,14 +36,15 @@
         ];
       in
       {
-        # nix develop .#backend, .#frontend, .#infra (the CI jobs)
-        devShells.backend = pkgs.mkShell {
+        # nix develop .#backend, .#frontend, .#infra (the CI jobs). NoCC: no step compiles C, and
+        # stdenv's compiler and binutils would add hundreds of MB to every job's download
+        devShells.backend = pkgs.mkShellNoCC {
           packages = backendTools;
         };
-        devShells.frontend = pkgs.mkShell {
+        devShells.frontend = pkgs.mkShellNoCC {
           packages = frontendTools;
         };
-        devShells.infra = pkgs.mkShell {
+        devShells.infra = pkgs.mkShellNoCC {
           packages = infraTools;
         };
 

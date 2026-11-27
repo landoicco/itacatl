@@ -27,7 +27,7 @@ Known gaps, each with the work it belongs to.
 | Gap | When |
 |---|---|
 | A 409 response for optimistic locking conflicts | Slice 4, with the stock holds |
-| A public write, such as a reservation, gets the `NONE` tenant scope until it is given one on purpose ([tenant isolation](tenant-isolation.md#traps)) | Slice 4 |
+| A public write, such as a reservation, gets the `NONE` tenant scope until it is given one on purpose ([tenant isolation](tenant-isolation.md#the-interceptor-and-the-url-rules)) | Slice 4 |
 | The owner panel's menu list has no upper bound or history ("see past menus") | When menus pile up |
 | Creating a catalog item from the menu editor | Owner panel polish |
 | Sign-in rate limiting ([security](security.md#known-limitations)) | Depends on an infra open decision |

@@ -1,6 +1,6 @@
 # Compile and package Spring app
 # Floating within Maven 3.9 and Java 21, so every build gets their patches. Dependabot ignores this
-# image because its tag embeds the JDK (see Runtime versions in docs/infra-plan.md)
+# image because its tag embeds the JDK (see Runtime versions in docs/ci.md)
 FROM maven:3.9-eclipse-temurin-21-alpine AS builder
 WORKDIR /app
 COPY pom.xml .
