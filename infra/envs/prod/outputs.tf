@@ -12,3 +12,23 @@ output "database_master_user_secret_arn" {
   description = "ARN of the Secrets Manager secret with the database's master password."
   value       = module.database.master_user_secret_arn
 }
+
+output "backend_repository_url" {
+  description = "ECR repository the backend image is pushed to."
+  value       = module.backend.repository_url
+}
+
+output "backend_image_tag_parameter_name" {
+  description = "SSM parameter with the image tag the backend runs, which a deploy updates."
+  value       = module.backend.image_tag_parameter_name
+}
+
+output "backend_autoscaling_group_name" {
+  description = "Auto Scaling group a deploy starts an instance refresh on."
+  value       = module.backend.autoscaling_group_name
+}
+
+output "backend_origin_domain_name" {
+  description = "DNS name of the backend's Elastic IP, CloudFront's origin."
+  value       = module.backend.origin_domain_name
+}
