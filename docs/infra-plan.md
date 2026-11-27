@@ -138,7 +138,7 @@ The infrastructure is finished when it is **deploy-ready**: on the day the maint
 
 1. **Complete:** every module except `notifications` is in `envs/prod`. Only a written list of account prerequisites is created by hand: the hosted zone, AWS Budgets and the maintainer's sign-in.
 2. **Checked without AWS:** everything above, plus an Infracost estimate within the $30 ceiling in CI.
-3. **The application is ready for AWS:** the `aws` profile is complete (database access through IAM, configuration from SSM and Secrets Manager, ECS JSON logs), and the backend image builds for arm64, the architecture of the Graviton instances.
+3. **The application is ready for AWS:** the `aws` profile is complete (database access through IAM, secrets from Secrets Manager, ECS JSON logs), and the backend image builds for arm64, the architecture of the Graviton instances.
 4. **The runbook goes end to end:** from an empty account to a running app with a smoke test, and back to nothing with a destroy, with exact commands. It covers destroying a database under deletion protection and what happens to its final snapshot, and gathers the first-apply checks of every module.
 5. **No open decision blocks it:** each one in the [list below](#open-decisions) is settled or deferred on purpose with its known limitation.
 
@@ -177,7 +177,7 @@ One PR per module, in this order; each joins `envs/prod` in the same PR, so the 
 - [x] `backend` module; add `trivy` to `flake.nix`, now that there are resources worth scanning
 - [ ] `frontend` module
 - [ ] `observability` module
-- [x] The application's `aws` profile: database access through IAM, configuration from SSM and Secrets Manager (so far only the image tag and the master secret; SecureString parameters join when a secret other than the database's appears)
+- [x] The application's `aws` profile: database access through IAM, the master secret from Secrets Manager ([guide](aws-profile.md)). The app reads nothing from SSM yet: the image tag there is read by the instance's user data, and SecureString parameters join when the app needs a secret other than the database's
 - [ ] The runbook's remaining steps: a smoke test and the first-apply checks (applying `envs/prod`, deploying the backend and the destroy are written)
 - [ ] `notifications` module, postponed until slices 5 and 6 need it
 

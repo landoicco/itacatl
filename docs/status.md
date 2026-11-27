@@ -34,7 +34,8 @@ Known gaps, each with the work it belongs to.
 | The owner panel's menu list has no upper bound or history ("see past menus") | When menus pile up |
 | Creating a catalog item from the menu editor | Owner panel polish |
 | Sign-in rate limiting ([security](security.md#known-limitations)) | Depends on an infra open decision |
-| A backend that never answers its health check leaves its instance running without the Elastic IP, and nothing replaces it: the group only watches EC2's status checks ([backend module](../infra/modules/backend/README.md)) | `observability` module, with an alarm |
+| Once in service, the backend's instance is watched only by EC2's status checks: an app that stops answering later is not replaced ([backend module](../infra/modules/backend/README.md)) | `observability` module, with an alarm |
+| The arm64 image, the one that runs in AWS, is not built in CI | Phase 3 of the [infra plan](infra-plan.md#phase-3-ci) |
 | The slug is resolved more than once per management request ([tenant isolation](tenant-isolation.md#known-limitations)) | Only if it shows up in profiling |
 
 ## Parked ideas
