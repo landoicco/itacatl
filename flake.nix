@@ -28,7 +28,16 @@
         infraTools = [
           terraform      # HashiCorp's binary (nix/terraform.nix)
           pkgs.tflint    # Terraform linter
+          pkgs.terraform-docs # inputs and outputs tables in each module's README
         ];
+
+        # Every directory that runs terraform init would download its own copy of the AWS
+        # provider (~770 MB unpacked). One cache shared by all of them keeps a single copy, and
+        # init links to it; the lock files still verify its checksums
+        terraformEnv = ''
+          export TF_PLUGIN_CACHE_DIR="''${XDG_CACHE_HOME:-$HOME/.cache}/terraform/plugins"
+          mkdir -p "$TF_PLUGIN_CACHE_DIR"
+        '';
 
         # The project's tools. Add new ones to the list of the part that needs them, or here
         tools = backendTools ++ frontendTools ++ infraTools ++ [
@@ -46,6 +55,7 @@
         };
         devShells.infra = pkgs.mkShellNoCC {
           packages = infraTools;
+          shellHook = terraformEnv;
         };
 
         # nix develop
@@ -53,7 +63,7 @@
           packages = tools;
 
           # Versions come from the Nix packages, so the banner costs no process startups
-          shellHook = ''
+          shellHook = terraformEnv + ''
             echo ""
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             printf '  🛠️  \033[1mItacatl dev tools\033[0m\n'
@@ -64,6 +74,7 @@
             echo "   🐙 gh         ${pkgs.gh.version}"
             echo "   🏗️  Terraform  ${terraform.version}"
             echo "   🧹 TFLint     ${pkgs.tflint.version}"
+            echo "   📝 tf-docs    ${pkgs.terraform-docs.version}"
             echo ""
           '';
         };

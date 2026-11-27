@@ -1,0 +1,22 @@
+# Run from infra/ with `terraform-docs .`: it fills the inputs and outputs tables of every
+# module's README between the BEGIN_TF_DOCS and END_TF_DOCS markers. The text around them is
+# written by hand. CI runs it with --output-check, which fails when a README is out of date.
+formatter: markdown table
+
+recursive:
+  enabled: true
+  path: modules
+  include-main: false
+
+output:
+  file: README.md
+  mode: inject
+
+sort:
+  enabled: true
+  by: required
+
+settings:
+  anchor: false
+  html: false
+  lockfile: false
