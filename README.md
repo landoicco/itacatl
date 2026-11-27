@@ -102,7 +102,7 @@ flowchart LR
 
 ### AWS (planned)
 
-A single low-cost production environment, deploy-ready but kept off: validated on every PR and applied only to capture evidence. Estimated at ~$25/month if left running. Design in [ADR 0002](docs/adr/0002-low-cost-production-architecture.md).
+A single low-cost production environment, deploy-ready but kept off: validated on every PR and applied only to capture evidence. Estimated at ~$25–27/month if left running, under a hard ceiling of $30. Design in [ADR 0002](docs/adr/0002-low-cost-production-architecture.md).
 
 ```mermaid
 flowchart LR

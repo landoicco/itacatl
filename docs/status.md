@@ -5,7 +5,7 @@ Where the work stands, what comes next, and what is still undecided. It is the e
 ## Now
 
 - **Released:** [v0.2.0](https://github.com/landoicco/itacatl/releases), tenant isolation (slices 1 to 3 of the [rework roadmap](product-spec.md#rework-roadmap)).
-- **Infrastructure:** Phase 1 (bootstrap) of the [infra plan](infra-plan.md#work-phases) is done, and Phase 2 (modules) is under way, one PR per module. Nothing is deployed: the infrastructure is ready but off ([Terraform guide](terraform.md)), and must stay under $25/month when running ([cost rules](infra-plan.md#cost-rules)).
+- **Infrastructure:** Phase 1 (bootstrap) of the [infra plan](infra-plan.md#work-phases) is done, and Phase 2 (modules) is under way, one PR per module. Nothing is deployed: the infrastructure is ready but off ([Terraform guide](terraform.md)), and must stay under a hard ceiling of $30/month when running, with the database never cut back to save money ([cost rules](infra-plan.md#cost-rules)).
 - **Latest:** the `network` module and the `envs/prod` stack that wires the modules together.
 - **Next:** the rest of Phase 2, in this order, each module joining `envs/prod` in its own PR:
   1. `database`: RDS, and how `itacatl_app` is created.
