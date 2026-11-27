@@ -138,7 +138,7 @@ Layers, patterns and the rules that keep them: [architecture guide](docs/archite
 **Delivery**
 - **One image, every environment:** Spring profiles change configuration only; the `aws` profile logs ECS JSON for CloudWatch.
 - **Guarded `main`:** CI (format, lint, tests, image builds) is required by a ruleset; actions are pinned to commit SHAs, and Dependabot sends grouped weekly updates ([CI and safeguards](docs/ci.md)).
-- **Reproducible toolchain:** JDK, Maven, Node and Terraform are pinned in a Nix flake; Terraform is HashiCorp's own binary, checked against its published SHA-256.
+- **Reproducible toolchain:** JDK, Maven, Node and Terraform are pinned in a Nix flake, and CI runs in the same flake's shells; Terraform is HashiCorp's own binary, checked against its published SHA-256.
 - **Infrastructure tested without a cloud account:** Terraform's tests run against a mocked AWS provider, so the infrastructure is checked on every change and deployed only on purpose ([Terraform guide](docs/terraform.md)).
 
 ## Stack
@@ -215,6 +215,7 @@ gh release create v0.1.0 --title "v0.1.0" --notes-file release-desc-body.md
 
 | Document | Contents |
 |---|---|
+| [Project status](docs/status.md) | Where the work stands, what comes next, open decisions, deferred follow-ups, parked ideas |
 | [Product spec](docs/product-spec.md) | Scope, domain rules, order flow, rework roadmap |
 | [Domain model](docs/domain-model.md) | Tables, tenant integrity, time handling, read and management API, errors, sample data |
 | [Architecture](docs/architecture.md) | Backend and frontend layers, patterns, enforced dependency rules, tests |

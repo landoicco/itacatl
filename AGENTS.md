@@ -6,7 +6,7 @@ Instructions for AI coding assistants working on this repository. They are tool-
 
 Portfolio project **itacatl**. Currently a simple e-commerce CRUD (Spring Boot + React + PostgreSQL), being reworked into a multi-tenant marketplace where small businesses such as *fondas* publish dynamic menus and customers reserve food for pickup. It is built to be deployed to AWS with Terraform.
 
-Read these before planning any feature or infrastructure work:
+Start with `docs/status.md`: where the work stands, what comes next, open decisions, deferred follow-ups and parked ideas. Then read these before planning any feature or infrastructure work:
 
 - `docs/product-spec.md`: product scope, domain rules, order flow.
 - `docs/infra-plan.md`: AWS architecture, cost rules, work phases.
@@ -26,7 +26,7 @@ The goal is learning: every technical choice should be one the maintainer can de
 
 The toolchain is defined in `flake.nix` and entered with `nix develop`. It holds only what the project needs to build and run; AI assistants are not part of it, so each developer brings their own, or none.
 
-- When the project needs a tool (a language, a CLI, a database client), add it to the `tools` list in `flake.nix` instead of installing it globally, and say which one you added.
+- When the project needs a tool (a language, a CLI, a database client), add it to `flake.nix` instead of installing it globally, and say which one you added. A tool for one part of the repo goes in that part's list (`backendTools`, `frontendTools`, `infraTools`), so its CI job gets it too; anything else goes in `tools`.
 - Prefer packages from `nixpkgs`. Look a name up with `nix search nixpkgs <name>` before adding it.
 - After changing `flake.nix`, the shell must be re-entered (`exit`, then `nix develop`) for the tool to appear; tell the developer when that is needed.
 - `flake.lock` pins the versions: commit it together with `flake.nix`.
@@ -58,7 +58,7 @@ Format every file you edit (`mvn spotless:apply`, `npm run format`, `terraform f
 ## Conventions
 
 - **Language:** everything committed (code, comments, docs, commit messages, PR descriptions) is in English.
-- **Docs in every PR:** each PR updates the docs it affects (README, `docs/`, ADRs), so `main` and its documentation never drift apart. A mechanism that gets added (a library, a pattern, a safety net) gets a guide in `docs/` explaining why it is there, how it is wired in and how to extend it. Ideas that were dropped are not documented.
+- **Docs in every PR:** each PR updates the docs it affects (README, `docs/`, ADRs), so `main` and its documentation never drift apart. A mechanism that gets added (a library, a pattern, a safety net) gets a guide in `docs/` explaining why it is there, how it is wired in and how to extend it. `docs/status.md` is updated too: what was done, what comes next, decisions taken or opened, follow-ups deferred. Ideas that were dropped are not documented; ideas set aside for later go to its parked list.
 - **Internationalization:** no user-facing text is hardcoded. UI strings go to the locale catalogs (`frontend/src/i18n/locales/`, every key in `en` and `es-MX`), API errors are codes the client translates, and formatting is locale-aware. See `docs/i18n.md`.
 - **Spring first:** prefer Spring's own tools (Security, Session, Data, Validation, Scheduling) over managed services, unless the service provides something Spring can't.
 - **Flyway:** until the first production deploy, migrations may be squashed into a clean baseline (ADR 0003); from then on, never edit an applied migration and add a new `V{n}__description.sql`.
