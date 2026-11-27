@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -91,10 +92,14 @@ public class SecurityConfig {
   }
 
   // Readable by JavaScript on purpose: the app copies it into the X-XSRF-TOKEN header, which a
-  // page on another site cannot do
+  // page on another site cannot do. HTTPS only in AWS, like the session cookie: the repository
+  // would otherwise judge from the request, and CloudFront reaches the app over HTTP
   @Bean
-  public CsrfTokenRepository csrfTokenRepository() {
-    return CookieCsrfTokenRepository.withHttpOnlyFalse();
+  public CsrfTokenRepository csrfTokenRepository(
+      @Value("${itacatl.session.cookie.secure:false}") boolean secure) {
+    CookieCsrfTokenRepository repository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+    repository.setCookieCustomizer(cookie -> cookie.secure(secure));
+    return repository;
   }
 
   // Spring Security's default, declared as a bean so the login endpoint saves the SecurityContext

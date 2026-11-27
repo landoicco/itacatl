@@ -22,3 +22,12 @@ variable "database_deletion_protection" {
   type        = bool
   default     = true
 }
+
+variable "domain" {
+  description = "The marketplace's domain and its Route 53 hosted zone ID, set by whoever launches it (git-ignored terraform.tfvars). Null serves it on CloudFront's *.cloudfront.net domain."
+  type = object({
+    name    = string
+    zone_id = string
+  })
+  default = null
+}

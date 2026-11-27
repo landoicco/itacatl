@@ -219,6 +219,8 @@ How it works:
 | `SameSite` | `Lax` | Browsers do not send it on requests started by other sites, except top-level navigation |
 | `Secure` | `aws` profile | Only over HTTPS. Set explicitly because CloudFront reaches the instance over HTTP, so the app cannot tell from the request |
 
+The `XSRF-TOKEN` cookie takes its `Secure` flag from the same setting (`itacatl.session.cookie.secure`), through a cookie customizer on the `CookieCsrfTokenRepository` bean. On its own, the repository would judge from the request, and behind CloudFront every request looks like plain HTTP.
+
 ## CSRF in a single-page app
 
 **The attack.** The browser attaches cookies to every request to a site, including requests started by another site. Without protection, a malicious page could submit a form to `/api/auth/logout`, or later to an endpoint that edits a menu, and the owner's session cookie would go with it.
@@ -275,6 +277,7 @@ A page on another origin cannot read the cookie (same-origin policy), so it cann
 | Test | What it proves |
 |---|---|
 | `AuthControllerIntegrationTest` | The whole flow over HTTP with the real filters, CSRF and sessions in PostgreSQL: sign-in like a browser, cookie flags, wrong password and unknown email give the same error, CSRF is required, sign-out ends the session, the marketplace stays public |
+| `SecureCookiesIntegrationTest` | With the `aws` profile's setting, the session and CSRF cookies are `Secure` even though the request is plain HTTP, as CloudFront's are |
 | `AccountRepositoryIntegrationTest` | A user's businesses in one query, lowercase emails, one membership per user and business |
 | `BusinessAccessIntegrationTest` | Owners manage and view, staff only view, nobody reaches another business, anonymous gets nothing |
 | `CatalogControllerIntegrationTest`, `ManagedMenuControllerIntegrationTest` | The management API over HTTP with real sign-in: the owner's flow, staff denied on changes, other owners denied, rule errors as 422 |

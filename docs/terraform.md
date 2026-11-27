@@ -20,7 +20,8 @@ infra/
 │   │   ├── README.md   # what it is for, plus generated inputs and outputs
 │   │   └── tests/
 │   ├── database/       # RDS PostgreSQL
-│   └── backend/        # ECR, the spot Auto Scaling group, its IAM role and Elastic IP
+│   ├── backend/        # ECR, the spot Auto Scaling group, its IAM role and Elastic IP
+│   └── frontend/       # S3 and CloudFront; ACM and Route 53 when a domain is given
 ├── testing/
 │   └── aws/            # values for the mocked AWS provider, shared by the test files
 └── envs/
@@ -72,7 +73,7 @@ The `Terraform` job in CI runs these on every pull request, through the flake's 
 | Security scan | `trivy config --exit-code 1 .` | Misconfigurations, of every severity: a public resource, a missing encryption, an open port ([accepted findings](#accepted-trivy-findings)) |
 | Tests | `terraform -chdir=<dir> test` | The properties that must hold, below |
 
-`<dir>` is each stack and each module: `bootstrap`, `modules/network`, `modules/database`, `modules/backend`, `envs/prod`. `init -backend=false` downloads the providers but never touches a backend, so it needs no bucket and no credentials. It writes `.terraform/`, which is git-ignored and only links to the shared plugin cache, and `.terraform.lock.hcl`, which is committed in every directory, modules included, so their tests run against the same provider version as CI.
+`<dir>` is each stack and each module: `bootstrap`, `modules/network`, `modules/database`, `modules/backend`, `modules/frontend`, `envs/prod`. `init -backend=false` downloads the providers but never touches a backend, so it needs no bucket and no credentials. It writes `.terraform/`, which is git-ignored and only links to the shared plugin cache, and `.terraform.lock.hcl`, which is committed in every directory, modules included, so their tests run against the same provider version as CI.
 
 ### Tests with a mocked provider
 
@@ -95,7 +96,7 @@ run "plain_http_is_denied" {
 ```
 
 - **They test intent, not AWS.** A mock cannot tell whether AWS would accept a setting; it proves that the code asks for what it should: a private, versioned, encrypted bucket. `validate` covers the provider's schema.
-- **Values a test needs are overridden.** `override_data` gives `aws_caller_identity` a fixed account ID, so the bucket name can be asserted. Where the code builds ARNs, the provider rejects one made of the mock's random strings, so `infra/testing/aws/aws.tfmock.hcl` fixes the partition, region and account with `mock_data`. A test file loads it with `mock_provider "aws" { source = "../../testing/aws" }`, so every file uses the same values and a change is made once. `override_resource` fills in what AWS would create on its own and a mock does not, such as the master secret RDS makes for the database.
+- **Values a test needs are overridden.** `override_data` gives `aws_caller_identity` a fixed account ID, so the bucket name can be asserted. Where the code builds ARNs, the provider rejects one made of the mock's random strings, so `infra/testing/aws/aws.tfmock.hcl` fixes the partition, region and account with `mock_data`, and the ARN of each resource that another one takes as an argument, such as a CloudFront function, with `mock_resource`. A test file loads it with `mock_provider "aws" { source = "../../testing/aws" }`, so every file uses the same values and a change is made once. `override_resource` fills in what AWS would create on its own and a mock does not, such as the master secret RDS makes for the database.
 - **Data sources are mocked too.** Policies are built with `jsonencode` instead of the `aws_iam_policy_document` data source, whose JSON a mock would make up.
 - **`command = plan`.** A `run` applies by default, and the test then destroys what it applied; `prevent_destroy` would make that cleanup fail. Plans are enough to read the configuration. The exception is a check that compares IDs, such as which route table a subnet uses: they are unknown in a plan, so that `run` applies against the mock, which creates nothing, in a module without `prevent_destroy`.
 
@@ -105,7 +106,8 @@ run "plain_http_is_denied" {
 | `modules/network/tests/network.tftest.hcl` | Public and private subnets in two zones with non-overlapping ranges; each subnet uses its own route table, and only the public one has a route, to the internet gateway; no subnet hands out public IPs; the default security group allows nothing; DNS is on; one zone, more zones than the region has, a VPC smaller than /20, an IPv6 range or one with host bits set is rejected |
 | `modules/database/tests/database.tftest.hcl` | The database is private, single-AZ and only in the subnets it is given; storage encrypted, seven days of backups, deletion protection on, and a destroy leaves a final snapshot with a unique name, also when the protection is lifted; RDS manages the master password and IAM sign-in is on; TLS is required, with a parameter group matching the engine; its security group has no rules; one subnet, or backups turned off, is rejected |
 | `modules/backend/tests/backend.tftest.hcl` | One spot instance, never on-demand, chosen by price and capacity, with capacity rebalancing, of any of the types in any of the subnets; a launch hook holds each new instance until it reports ready, and abandons it otherwise; IMDSv2 with two hops, an encrypted root volume, the latest arm64 AMI resolved at launch, standard CPU credits; only CloudFront reaches it, on 8080; it reaches only the database and HTTPS, and the database admits it; every permission names its resource, `rds-db:connect` only as `itacatl_app`, only the master secret; the user data runs the image with the `aws` profile, takes the Elastic IP and reports to the hook; immutable, scanned images, ten tagged ones kept, never counted with untagged ones; logs kept 14 days; one subnet, one instance type or an x86 type is rejected |
-| `envs/prod/tests/prod.tftest.hcl` | How prod wires the modules: they are named `<project>-prod`; the database sits in the network's private subnets and the backend in its public ones; a project name S3 would reject fails at plan time |
+| `modules/frontend/tests/frontend.tftest.hcl` | The bucket is named per account, blocks public access, has ACLs off, and is read only by this distribution, over TLS; the app is served from it over HTTPS, read-only, with the routes rewritten to `index.html`, in the cheapest price class; `/api/*` goes to the backend's address on its port, uncached, with every method and the viewer's cookies; without a domain, no certificate or DNS records and CloudFront's own certificate; with one, a DNS-validated certificate, A and AAAA aliases and TLS 1.2 or later; a domain outside `us-east-1`, or a name too long for the bucket, is rejected |
+| `envs/prod/tests/prod.tftest.hcl` | How prod wires the modules: they are named `<project>-prod`; the database sits in the network's private subnets and the backend in its public ones; CloudFront's `/api` origin is the backend's Elastic IP, and prod is served on CloudFront's domain without a domain of its own; a project name S3 would reject fails at plan time |
 
 Each module tests its own properties; a stack's tests only check how it joins the modules, so a property is asserted once.
 
@@ -121,6 +123,9 @@ Trivy reports every severity, and CI fails on any finding. One that is accepted 
 | `AVD-AWS-0133`, RDS without Performance Insights | `database` | Database monitoring is decided with the observability module |
 | `AVD-AWS-0033`, ECR without a customer-managed key | `backend` | A key bills monthly; ECR encrypts the images with its own |
 | `AVD-AWS-0017`, a log group without a customer-managed key | `backend` | The same; CloudWatch encrypts the logs with its own |
+| `AVD-AWS-0089`, `AVD-AWS-0090`, `AVD-AWS-0132`: S3 access logging, versioning, a customer-managed key | `frontend`, the build's bucket | CloudFront is its only reader; every file can be rebuilt from its commit; a key bills monthly |
+| `AVD-AWS-0010`, CloudFront access logs | `frontend` | They bill for their storage; decided with the observability module |
+| `AVD-AWS-0011`, CloudFront without WAF | `frontend` | WAF bills monthly; rate limiting is an [open decision](infra-plan.md#open-decisions) |
 | `AVD-AWS-0104`, egress to any address | `backend` | HTTPS to AWS's public endpoints, whose addresses are not fixed; without a NAT gateway or VPC endpoints they are reached over the internet |
 
 Accepting a new one takes a reason that names what it would cost or why it does not apply, and a row here.
@@ -135,6 +140,7 @@ Accepting a new one takes a reason that names what it would cost or why it does 
 |---|---|
 | [`network`](../infra/modules/network/README.md) | VPC over two zones; public subnets for the backend, private ones for the database with no route out; no NAT gateway; the default security group emptied |
 | [`database`](../infra/modules/database/README.md) | RDS PostgreSQL 18, single-AZ, in the private subnets; master password in Secrets Manager, IAM sign-in for the application, TLS required; encrypted, backed up, protected from deletion, with a final snapshot; a security group that clients add their rules to |
+| [`frontend`](../infra/modules/frontend/README.md) | A private S3 bucket for the build; one CloudFront distribution for the app and `/api`, with the app's routes rewritten to `index.html` and security headers; with a domain, its ACM certificate and Route 53 aliases |
 | [`backend`](../infra/modules/backend/README.md) | ECR; one spot Graviton instance in an Auto Scaling group, in the public subnets, in service only once the app answers; an Elastic IP as CloudFront's origin; a security group open only to CloudFront, and the database's rule for it; an IAM role with one resource per permission; the image tag in SSM; logs in CloudWatch |
 
 Each module's README ends with what to confirm on the first apply: what a mocked provider cannot check against AWS.
@@ -172,10 +178,28 @@ Nothing in AWS is created until this runbook is followed. It runs from the maint
    terraform init -backend-config=backend.hcl
    terraform apply
    ```
-   The database takes about ten minutes. The backend's instance boots too, but its image tag is still `none`, so it goes into service without the app until the first deploy; that is expected.
-6. **Deploy the backend**, as in [Deploying the backend](#deploying-the-backend).
+   The database takes about ten minutes, the CloudFront distribution several. The backend's instance boots too, but its image tag is still `none`, so it goes into service without the app until the first deploy; that is expected.
 
-The remaining steps (the frontend, a smoke test through CloudFront) arrive with the modules of Phase 2.
+   **With the business's own domain**, whose hosted zone already exists in Route 53, first write it in a `terraform.tfvars` next to `main.tf`, which git ignores:
+   ```hcl
+   domain = {
+     name    = "shop.example.com"
+     zone_id = "Z0123456789ABCDEFGHIJ" # aws route53 list-hosted-zones
+   }
+   ```
+   Without it, the marketplace is served on CloudFront's own `*.cloudfront.net` domain.
+6. **Deploy the backend**, as in [Deploying the backend](#deploying-the-backend).
+7. **Deploy the frontend**, as in [Deploying the frontend](#deploying-the-frontend).
+8. **Smoke test**, through CloudFront, back in `infra/envs/prod`:
+   ```shell
+   cd ../infra/envs/prod   # from frontend/, where step 7 ends
+   url=$(terraform output -raw url)
+   curl -fsS "$url/" | grep -q '<div id="root">' && echo "app ok"
+   curl -fsS "$url/api/businesses" && echo "api ok"
+   ```
+   Then open `$url` in a browser, open a shop, and sign in to the owner panel: the session and CSRF cookies only work if CloudFront forwards them.
+
+The observability module adds its steps after these.
 
 ### Deploying the backend
 
@@ -200,6 +224,26 @@ aws autoscaling start-instance-refresh \
 - **Rolling back** is the same two commands with an earlier tag still in ECR, which keeps the last ten. A migration is not rolled back, so a tag older than the database's schema may not start.
 - **Inside the instance:** Session Manager opens a shell (`aws ssm start-session --target <instance ID>`, with the Session Manager plugin). The boot's output is in `/var/log/cloud-init-output.log`.
 
+### Deploying the frontend
+
+The build goes to the bucket; CloudFront serves it. From `frontend/`, on a clean checkout of the commit to deploy:
+
+```shell
+npm ci
+VITE_DEFAULT_LOCALE=es-MX VITE_THEME=pastel npm run build   # the deployment's locale and theme
+
+bucket=$(terraform -chdir=../infra/envs/prod output -raw frontend_bucket_name)
+aws s3 sync dist "s3://$bucket" --exclude index.html \
+  --cache-control "public, max-age=31536000, immutable"
+aws s3 cp dist/index.html "s3://$bucket/index.html" --cache-control no-cache
+aws s3 sync dist "s3://$bucket" --delete --exclude index.html \
+  --cache-control "public, max-age=31536000, immutable"
+```
+
+- **The locale and theme are build settings** ([i18n](i18n.md), [theming](theming.md)), like the backend's seed file: each deployment builds with its own.
+- **Three steps, in this order.** The new files go up first, then the `index.html` that names them, and only then are the previous build's files deleted. A visitor who loaded the old `index.html` a moment before still finds the files it names.
+- **No invalidation needed.** The other files carry a content hash in their names, so a new build never reuses a name and they can be cached for a year. `index.html` is uploaded with `no-cache`, so CloudFront checks it on every request and a deploy shows at once. If it ever has to be forced: `aws cloudfront create-invalidation --distribution-id "$(terraform -chdir=../infra/envs/prod output -raw frontend_distribution_id)" --paths /index.html`.
+
 ### Destroying prod
 
 The database refuses to be deleted, so a destroy takes two steps, from `infra/envs/prod`:
@@ -209,7 +253,7 @@ terraform apply -var database_deletion_protection=false   # only lifts the prote
 terraform destroy
 ```
 
-The destroy also deletes the ECR repository with its images, which every commit can rebuild. The apply is needed because the protection is enforced by AWS, not by Terraform: a destroy only plans deletions, and RDS refuses to delete an instance that still has it on. Once the apply has turned it off, the destroy goes through. RDS then takes a final snapshot, named `itacatl-prod-final-<random suffix>`, and deletes the instance; its automated backups go with it. The snapshot stays, billed by the size of the data (cents for a small database), and the next database never restores from it on its own. List and delete old ones when they are no longer needed:
+The destroy also deletes the ECR repository and the frontend's bucket with what they hold, which every commit can rebuild. The apply is needed because the protection is enforced by AWS, not by Terraform: a destroy only plans deletions, and RDS refuses to delete an instance that still has it on. Once the apply has turned it off, the destroy goes through. RDS then takes a final snapshot, named `itacatl-prod-final-<random suffix>`, and deletes the instance; its automated backups go with it. The snapshot stays, billed by the size of the data (cents for a small database), and the next database never restores from it on its own. List and delete old ones when they are no longer needed:
 
 ```shell
 aws rds describe-db-snapshots --snapshot-type manual --query 'DBSnapshots[].DBSnapshotIdentifier'

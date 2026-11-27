@@ -37,3 +37,8 @@ output "subnet_ids" {
   description = "Subnets the Auto Scaling group launches the instance in."
   value       = aws_autoscaling_group.this.vpc_zone_identifier
 }
+
+output "origin_port" {
+  description = "Port the backend answers on over HTTP, for CloudFront's origin."
+  value       = local.app_port
+}
