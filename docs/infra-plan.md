@@ -44,7 +44,8 @@ flowchart LR
 
 | Rule | Why |
 |---|---|
-| No NAT gateway | ~$33/month on its own. The EC2 instance sits in a public subnet with a security group that only allows the CloudFront prefix list; RDS needs no internet access |
+| **At most $25/month when running** | The ceiling for the whole marketplace: what a group of small businesses can carry together. Pay per use only, with no reservations or savings plans, so destroying the environment brings the bill to cents. Any change that would push the estimate past it is redesigned, not accepted |
+| No NAT gateway | ~$33/month on its own. The EC2 instance sits in a public subnet with a security group that only allows the CloudFront prefix list; RDS needs no internet access. For the same reason the instance does not move to a private subnet behind CloudFront VPC origins: it would then need a NAT gateway or interface endpoints to reach ECR and SSM |
 | No load balancer | ~$17/month. CloudFront terminates TLS and reaches the instance directly |
 | No Multi-AZ by default | Doubles the database cost. The ASG and RDS backups cover the failures a small marketplace can tolerate |
 | No interface VPC endpoints | ~$7/month each |
@@ -114,10 +115,16 @@ Phases 1 to 3 need no AWS account: each tool joins the Nix shell in the phase th
 **Done when:** the bootstrap passes `fmt`, `validate`, `tflint` and its tests without AWS credentials.
 
 ### Phase 2: Modules
-- [ ] Add `trivy` and `terraform-docs` to `flake.nix`
-- [ ] `network`, `database`, `backend`, `frontend`, `notifications` and `observability` modules, each with tests
-- [ ] `envs/prod` wiring them together
+One PR per module, in this order; each joins `envs/prod` in the same PR, so the stack can always be planned as a whole.
+
+- [x] Add `terraform-docs` to `flake.nix`, with a plugin cache shared by every directory
+- [x] `network` module, and `envs/prod` wiring it
+- [ ] `database` module
+- [ ] `backend` module; add `trivy` to `flake.nix`, now that there are resources worth scanning
+- [ ] `frontend` module
+- [ ] `observability` module
 - [ ] The runbook's remaining steps: applying `envs/prod` and pushing the backend image to ECR
+- [ ] `notifications` module, postponed until slices 5 and 6 need it
 
 **Done when:** `envs/prod` passes the same checks, `trivy` finds nothing unaccepted, and an Infracost estimate stays within the table above.
 
@@ -141,5 +148,4 @@ Phases 1 to 3 need no AWS account: each tool joins the Nix shell in the phase th
 
 - Production domain.
 - CloudFront flat-rate free plan (includes WAF) if compatible with an EC2 origin; otherwise rate limiting in Spring with Bucket4j.
-- CloudFront VPC origins, which would move the instance to a private subnet and drop the public IPv4 cost, at the price of needing another way out to the internet.
 - How `itacatl_app` is created in RDS. The Terraform PostgreSQL provider needs network access to the database, which is not public; the alternatives are a one-time step through SSM Session Manager on the instance, or the backend creating it at startup with the master credentials before Flyway runs.

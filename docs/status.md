@@ -5,18 +5,22 @@ Where the work stands, what comes next, and what is still undecided. It is the e
 ## Now
 
 - **Released:** [v0.2.0](https://github.com/landoicco/itacatl/releases), tenant isolation (slices 1 to 3 of the [rework roadmap](product-spec.md#rework-roadmap)).
-- **Infrastructure:** Phase 1 (bootstrap) of the [infra plan](infra-plan.md#work-phases) is done. Nothing is deployed: the infrastructure is ready but off ([Terraform guide](terraform.md)).
-- **Latest:** CI takes its toolchain from the flake ([CI](ci.md#tools-from-the-flake)).
-- **Next:** one of
-  - Phase 2 of the infra plan: the Terraform modules and `envs/prod`.
-  - Slice 4 of the roadmap: cash reservations.
+- **Infrastructure:** Phase 1 (bootstrap) of the [infra plan](infra-plan.md#work-phases) is done, and Phase 2 (modules) is under way, one PR per module. Nothing is deployed: the infrastructure is ready but off ([Terraform guide](terraform.md)), and must stay under $25/month when running ([cost rules](infra-plan.md#cost-rules)).
+- **Latest:** the `network` module and the `envs/prod` stack that wires the modules together.
+- **Next:** the rest of Phase 2, in this order, each module joining `envs/prod` in its own PR:
+  1. `database`: RDS, and how `itacatl_app` is created.
+  2. `backend`: ECR, the spot Auto Scaling group, IAM; Trivy joins the flake here.
+  3. `frontend`: S3, CloudFront, ACM, Route 53.
+  4. `observability`: alarms and dashboard, and the runbook's remaining steps.
+  5. `notifications` waits until slices 5 and 6 need it.
+
+  Slice 4 of the roadmap (cash reservations) comes after, or in between if the maintainer prefers.
 
 ## Open decisions
 
 Not settled yet; each needs the maintainer's call before the work that depends on it.
 
-- **Order of the Terraform modules.** Proposed: `network`, `database`, `backend`, `frontend`, `observability`, then `envs/prod`; `notifications` waits until slices 5 and 6 need it.
-- **Infrastructure:** the [open decisions of the infra plan](infra-plan.md#open-decisions) (domain, rate limiting, VPC origins, how `itacatl_app` is created in RDS).
+- **Infrastructure:** the [open decisions of the infra plan](infra-plan.md#open-decisions) (domain, rate limiting, how `itacatl_app` is created in RDS).
 
 Settled decisions are in the [ADRs](adr/) and in each guide's "why" sections. One without its own guide: the Docker images keep building from their Dockerfiles rather than from Nix, so trying the app locally needs only Docker.
 
