@@ -1,0 +1,4 @@
+# Copy to backend.hcl (git-ignored) and fill in from the bootstrap's outputs:
+# terraform -chdir=../../bootstrap output -raw state_bucket, and output -raw region
+bucket = "itacatl-tfstate-<account ID>"
+region = "us-east-1"
