@@ -16,9 +16,10 @@ infra/
 │   ├── backend.hcl.example # bucket and region, kept out of git
 │   └── tests/          # terraform test, against a mocked provider
 ├── modules/            # building blocks, no state of their own
-│   └── network/        # VPC, subnets, routes
-│       ├── README.md   # what it is for, plus generated inputs and outputs
-│       └── tests/
+│   ├── network/        # VPC, subnets, routes
+│   │   ├── README.md   # what it is for, plus generated inputs and outputs
+│   │   └── tests/
+│   └── database/       # RDS PostgreSQL
 └── envs/
     └── prod/           # stack: every module wired together
         ├── main.tf
@@ -67,7 +68,7 @@ The `Terraform` job in CI runs these on every pull request, through the flake's 
 | Module docs | `terraform-docs --output-check .` | A module README whose inputs and outputs tables no longer match the code (`terraform-docs .` regenerates them) |
 | Tests | `terraform -chdir=<dir> test` | The properties that must hold, below |
 
-`<dir>` is each stack and each module: `bootstrap`, `modules/network`, `envs/prod`. `init -backend=false` downloads the providers but never touches a backend, so it needs no bucket and no credentials. It writes `.terraform/`, which is git-ignored and only links to the shared plugin cache, and `.terraform.lock.hcl`, which is committed in every directory, modules included, so their tests run against the same provider version as CI.
+`<dir>` is each stack and each module: `bootstrap`, `modules/network`, `modules/database`, `envs/prod`. `init -backend=false` downloads the providers but never touches a backend, so it needs no bucket and no credentials. It writes `.terraform/`, which is git-ignored and only links to the shared plugin cache, and `.terraform.lock.hcl`, which is committed in every directory, modules included, so their tests run against the same provider version as CI.
 
 ### Tests with a mocked provider
 
@@ -98,19 +99,23 @@ run "plain_http_is_denied" {
 |---|---|
 | `bootstrap/tests/state.tftest.hcl` | Bucket named per account, versioned, encrypted, never public, TLS only; old versions expire but the newest are kept; retention must be positive; a project name S3 would reject fails at plan time |
 | `modules/network/tests/network.tftest.hcl` | Public and private subnets in two zones with non-overlapping ranges; each subnet uses its own route table, and only the public one has a route, to the internet gateway; no subnet hands out public IPs; the default security group allows nothing; DNS is on; one zone, more zones than the region has, a VPC smaller than /20, an IPv6 range or one with host bits set is rejected |
-| `envs/prod/tests/prod.tftest.hcl` | How prod wires the modules: they are named `<project>-prod`; a project name S3 would reject fails at plan time |
+| `modules/database/tests/database.tftest.hcl` | The database is private, single-AZ and only in the subnets it is given; storage encrypted, seven days of backups, deletion protection on, and a destroy leaves a final snapshot with a unique name, also when the protection is lifted; RDS manages the master password and IAM sign-in is on; TLS is required, with a parameter group matching the engine; its security group has no rules; one subnet, or backups turned off, is rejected |
+| `envs/prod/tests/prod.tftest.hcl` | How prod wires the modules: they are named `<project>-prod`; the database sits in the network's private subnets; a project name S3 would reject fails at plan time |
 
 Each module tests its own properties; a stack's tests only check how it joins the modules, so a property is asserted once.
 
 ## Modules
 
-- **Versions:** a module declares only a lower bound for the AWS provider (`>= 6.73`); the stack that uses it pins the version (`~> 6.73`) and its lock decides the exact one.
+- **Versions:** a module declares only a lower bound for each provider (`>= 6.73` for AWS); the stack that uses it pins the version (`~> 6.73`) and its lock decides the exact one. Besides AWS, `database` uses `hashicorp/random`, which runs locally and needs no credentials, so the tests use the real one.
 - **README:** what the module is for and why it is built that way, written by hand, followed by the inputs and outputs tables that `terraform-docs` generates between the `BEGIN_TF_DOCS` and `END_TF_DOCS` markers. The tables come from each variable's and output's `description`, so those are written for a reader of the README.
 - **Tests:** each module has its own `tests/`, with a mocked provider like the stacks.
 
 | Module | What it creates |
 |---|---|
 | [`network`](../infra/modules/network/README.md) | VPC over two zones; public subnets for the backend, private ones for the database with no route out; no NAT gateway; the default security group emptied |
+| [`database`](../infra/modules/database/README.md) | RDS PostgreSQL 18, single-AZ, in the private subnets; master password in Secrets Manager, IAM sign-in for the application, TLS required; encrypted, backed up, protected from deletion, with a final snapshot; a security group that clients add their rules to |
+
+Each module's README ends with what to confirm on the first apply: what a mocked provider cannot check against AWS.
 
 ## First deploy
 
@@ -139,6 +144,22 @@ Nothing in AWS is created until this runbook is followed. It runs from the maint
    From then on the bootstrap reads its state from S3 like any stack. Commit `backend.tf`, which holds no account ID; `backend.hcl` stays out of git.
 
 The remaining steps (applying `envs/prod`, pushing the backend image) arrive with the modules of Phase 2.
+
+### Destroying prod
+
+The database refuses to be deleted, so a destroy takes two steps, from `infra/envs/prod`:
+
+```shell
+terraform apply -var database_deletion_protection=false   # only lifts the protection
+terraform destroy -var database_deletion_protection=false
+```
+
+Pass the same variable to `destroy`, or Terraform would plan to turn the protection back on first. RDS then takes a final snapshot, named `itacatl-prod-final-<random suffix>`, and deletes the instance; its automated backups go with it. The snapshot stays, billed by the size of the data (cents for a small database), and the next database never restores from it on its own. List and delete old ones when they are no longer needed:
+
+```shell
+aws rds describe-db-snapshots --snapshot-type manual --query 'DBSnapshots[].DBSnapshotIdentifier'
+aws rds delete-db-snapshot --db-snapshot-identifier <identifier>
+```
 
 ### On another machine
 

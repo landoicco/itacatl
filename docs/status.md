@@ -6,14 +6,13 @@ Where the work stands, what comes next, and what is still undecided. It is the e
 
 - **Released:** [v0.2.0](https://github.com/landoicco/itacatl/releases), tenant isolation (slices 1 to 3 of the [rework roadmap](product-spec.md#rework-roadmap)).
 - **Infrastructure:** Phase 1 (bootstrap) of the [infra plan](infra-plan.md#work-phases) is done, and Phase 2 (modules) is under way, one PR per module. Nothing is deployed: the infrastructure is ready but off ([Terraform guide](terraform.md)), and must stay under a hard ceiling of $30/month when running, with the database never cut back to save money ([cost rules](infra-plan.md#cost-rules)).
-- **Latest:** the `network` module and the `envs/prod` stack that wires the modules together.
+- **Latest:** the `database` module (RDS PostgreSQL, IAM sign-in for the application, protected from deletion), and `itacatl_app` created by the backend itself in every environment. Before it, the `network` module and the `envs/prod` stack.
 - **Goal:** the infrastructure is finished when it is [deploy-ready](infra-plan.md#definition-of-done), with nothing created in AWS until the maintainer decides to launch.
 - **Next:** the rest of Phase 2, in this order, each module joining `envs/prod` in its own PR:
-  1. `database`: RDS (in progress). `itacatl_app` is now created by the backend itself, with IAM sign-in in AWS.
-  2. `backend`: ECR, the spot Auto Scaling group, IAM; Trivy joins the flake here.
-  3. `frontend`: S3, CloudFront, ACM, Route 53.
-  4. `observability`: alarms and dashboard, and the runbook's remaining steps.
-  5. `notifications` waits until slices 5 and 6 need it.
+  1. `backend`: ECR, the spot Auto Scaling group, IAM (`rds-db:connect` for `itacatl_app`), the database's ingress rule, and the `aws` profile's IAM sign-in through the AWS JDBC wrapper; Trivy joins the flake here.
+  2. `frontend`: S3, CloudFront, ACM, Route 53.
+  3. `observability`: alarms and dashboard, and the runbook's remaining steps.
+  4. `notifications` waits until slices 5 and 6 need it.
 
   Slice 4 of the roadmap (cash reservations) comes after, or in between if the maintainer prefers.
 

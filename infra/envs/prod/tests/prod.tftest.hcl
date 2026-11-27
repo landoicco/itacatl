@@ -23,6 +23,16 @@ run "resources_are_named_after_the_project_and_env" {
   }
 }
 
+# Applied against the mock, because subnet IDs are unknown in a plan.
+run "the_database_is_in_the_private_subnets" {
+  command = apply
+
+  assert {
+    condition     = module.database.subnet_ids == toset(module.network.private_subnet_ids)
+    error_message = "The database must be placed in the network's private subnets, never the public ones."
+  }
+}
+
 run "an_invalid_project_name_is_rejected" {
   command = plan
 

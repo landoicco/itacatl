@@ -40,6 +40,37 @@ flowchart LR
 - **Access:** SSM Session Manager, no SSH.
 - **Observability:** CloudWatch Logs with short retention, alarms (instance health, RDS storage and CPU, DLQ depth, CloudFront 5xx) and one dashboard.
 
+### Inside the VPC
+
+```mermaid
+flowchart TB
+    cf[CloudFront] -->|"HTTP, from the CloudFront prefix list only"| ec2
+    subgraph vpc ["VPC 10.0.0.0/16 (network)"]
+        igw["Internet gateway"]
+        subgraph z1 ["Zone 1"]
+            subgraph pub1 ["Public subnet 10.0.0.0/24"]
+                ec2["Backend instance (backend)<br/>spot, one at a time"]
+            end
+            subgraph priv1 ["Private subnet 10.0.128.0/24"]
+                rds[("RDS PostgreSQL (database)<br/>single-AZ")]
+            end
+        end
+        subgraph z2 ["Zone 2"]
+            subgraph pub2 ["Public subnet 10.0.1.0/24"]
+                spare["Where the ASG launches<br/>the replacement, if zone 1<br/>has no spot capacity"]
+            end
+            subgraph priv2 ["Private subnet 10.0.129.0/24"]
+                second["Second zone of the RDS<br/>subnet group, which RDS<br/>requires; empty"]
+            end
+        end
+    end
+    igw <-->|"public route table: 0.0.0.0/0"| pub1 & pub2
+    ec2 -->|"5432, TLS, IAM token<br/>backend SG to database SG"| rds
+    ec2 -.->|"ECR, SSM, Secrets Manager,<br/>through the internet gateway"| igw
+```
+
+Each box names the module that creates it. The private subnets share a route table with only the local route, so the database has no path to or from the internet; the public ones reach it through the internet gateway. The database's security group admits only the backend's, on port 5432, and the backend's admits only CloudFront. The zones are the region's first two standard ones other than `use1-az3`.
+
 ## Cost rules
 
 | Rule | Why |
@@ -142,7 +173,7 @@ One PR per module, in this order; each joins `envs/prod` in the same PR, so the 
 
 - [x] Add `terraform-docs` to `flake.nix`, with a plugin cache shared by every directory
 - [x] `network` module, and `envs/prod` wiring it
-- [ ] `database` module
+- [x] `database` module, and the runbook's destroy steps
 - [ ] `backend` module; add `trivy` to `flake.nix`, now that there are resources worth scanning
 - [ ] `frontend` module
 - [ ] `observability` module

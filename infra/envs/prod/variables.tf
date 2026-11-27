@@ -16,3 +16,9 @@ variable "project" {
     error_message = "The project must be 1 to 42 lowercase letters, digits or hyphens, not starting or ending with a hyphen."
   }
 }
+
+variable "database_deletion_protection" {
+  description = "Whether the database refuses to be deleted. Set it to false and apply only right before a destroy (see docs/terraform.md)."
+  type        = bool
+  default     = true
+}
