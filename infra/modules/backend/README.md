@@ -5,8 +5,9 @@ The Spring Boot backend on one spot Graviton instance, kept running by an Auto S
 - **Spot only, one instance.** A mixed instances policy offers several 2 GB Graviton types in both public subnets, chosen by price and capacity. Capacity rebalancing launches a replacement when AWS recommends it, before the two-minute notice. There is no on-demand fallback ([cost rules](../../../docs/infra-plan.md#cost-rules)).
 - **A stable origin for CloudFront.** Every instance gets a new public IP, so the module keeps an Elastic IP that each new instance takes for itself once the app answers its health check. The address costs the same as the public IPv4 an instance would have anyway.
 - **In service only when ready.** Without a load balancer, the group would count an instance in service as soon as EC2 says it is running, minutes before the app answers. A launch lifecycle hook holds each new instance pending until its user data reports that the app answers and the address is taken. Only then does capacity rebalancing terminate the old instance, so a replacement takes the traffic only when it can serve it. A failed step, or no report within 15 minutes, abandons the instance, and the group launches another.
-- **Reachable only from CloudFront.** The security group admits CloudFront's origin-facing prefix list on 8080, and nothing else: no SSH, since Session Manager opens a shell through the instance's role. It starts connections only to the database (5432, the module adds the database's ingress rule too) and to HTTPS, where AWS's APIs are; without a NAT gateway or VPC endpoints they are reached over the internet.
-- **No secret on the instance.** The user data passes only names and addresses. The app reads the master user's credentials from Secrets Manager to migrate, and signs in as `itacatl_app` with an IAM token; the role allows `rds-db:connect` for that user only.
+- **Reachable only from CloudFront.** The security group admits CloudFront's origin-facing prefix list on 8080, and nothing else: no SSH, since Session Manager opens a shell through the instance's role. It starts connections only to the database (5432, the module adds the database's ingress rule too) and to HTTPS, where AWS's APIs are; without a NAT gateway or VPC endpoints they are reached over the internet. The security group alone cannot tell this distribution from another account's, so the app also requires a secret header that only this one adds (below).
+- **No database secret on the instance.** The user data passes only names and addresses. The app reads the master user's credentials from Secrets Manager to migrate, and signs in as `itacatl_app` with an IAM token; the role allows `rds-db:connect` for that user only.
+- **The origin secret.** A 48-character `random_password`, stored as an SSM SecureString at `/<name>/backend/app/itacatl.origin.secret` and output for the frontend module, which has CloudFront send it in `X-Origin-Verify`. The app imports every parameter under `/<name>/backend/app/`, each named after its Spring property, and rejects any request without the header ([origin verification](../../../docs/security.md#origin-verification)); the role reads only that path. To rotate it: `terraform apply -replace=module.backend.random_password.origin_secret`, then an instance refresh, since the app reads it only at start; requests fail with 403 in between.
 - **Each permission names its resource.** Only ECR's sign-in and `cloudwatch:PutMetricData` apply to every resource, as AWS requires; the latter only in the module's own namespace. The instance may associate the Elastic IP only with instances that carry its own profile, and report only to its own group.
 - **A hung app is replaced.** Once in service, the group watches only EC2's status checks, which pass while the app hangs, and Docker restarts the container only when it exits. A systemd timer, installed by the user data right before the instance reports ready, calls `/actuator/health/liveness` every minute; after five failures in a row, which leave room for a restart, it marks the instance `Unhealthy` with `set-instance-health`, and the group replaces it. Liveness leaves the database out (`management.endpoint.health.probes.enabled`), so a database outage does not get a healthy backend replaced; the full `/actuator/health`, database included, still gates going into service. A load balancer's health check would do the same for about $16/month.
 - **Memory and disk.** EC2 does not report them, so the CloudWatch agent publishes `mem_used_percent` and `disk_used_percent` of `/`, once a minute, to the `<name>/backend` namespace, the disk also aggregated by `path` alone so the alarm does not depend on the file system's type: three custom metrics, within CloudWatch's free ten. Without a host dimension, every instance the group launches writes to the same series, so the [observability](../observability/README.md) module's alarms outlive a replacement. The agent starts while the app boots, adding nothing to a deploy's downtime, and it is optional: if it fails to install or start, the instance only logs it and serves anyway. The group also publishes `GroupInServiceInstances`, which has no charge.
@@ -54,6 +55,7 @@ A mocked provider cannot check these against AWS; confirm them on the first appl
 - The ECR pull works with `ecr:BatchGetImage` and `ecr:GetDownloadUrlForLayer` alone.
 - The app migrates and signs in as `itacatl_app` (its logs in CloudWatch), and the Elastic IP's DNS name answers `/actuator/health` from CloudFront.
 - The `amazon-cloudwatch-agent` package installs from Amazon Linux's repository, and `<name>/backend` shows `mem_used_percent` with no dimension and `disk_used_percent` aggregated by `path=/` alone, the dimensions the alarms expect.
+- The app imports `/<name>/backend/app/` at start with `ssm:GetParametersByPath` on the path alone, and decrypts the SecureString with SSM's own key without a `kms:Decrypt` grant; otherwise it does not start, and its log says why.
 - `systemctl list-timers backend-watchdog.timer` shows the watchdog. Stopping the container (`docker stop backend`) gets the instance marked `Unhealthy` within about five minutes, and the group replaces it.
 
 <!-- BEGIN_TF_DOCS -->
@@ -63,12 +65,14 @@ A mocked provider cannot check these against AWS; confirm them on the first appl
 | ---- | ------- |
 | terraform | ~> 1.17 |
 | aws | >= 6.73 |
+| random | >= 3.7 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
 | aws | >= 6.73 |
+| random | >= 3.7 |
 
 ## Modules
 
@@ -90,10 +94,12 @@ No modules.
 | [aws_launch_template.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/launch_template) | resource |
 | [aws_security_group.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/security_group) | resource |
 | [aws_ssm_parameter.image_tag](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_parameter) | resource |
+| [aws_ssm_parameter.origin_secret](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_parameter) | resource |
 | [aws_vpc_security_group_egress_rule.https](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc_security_group_egress_rule) | resource |
 | [aws_vpc_security_group_egress_rule.to_database](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc_security_group_egress_rule) | resource |
 | [aws_vpc_security_group_ingress_rule.database_from_backend](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc_security_group_ingress_rule) | resource |
 | [aws_vpc_security_group_ingress_rule.from_cloudfront](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc_security_group_ingress_rule) | resource |
+| [random_password.origin_secret](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/password) | resource |
 | [aws_caller_identity.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
 | [aws_ec2_managed_prefix_list.cloudfront](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ec2_managed_prefix_list) | data source |
 | [aws_partition.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/partition) | data source |
@@ -126,6 +132,7 @@ No modules.
 | metrics\_namespace | CloudWatch namespace of the instance's memory and disk metrics, published by the CloudWatch agent. |
 | origin\_domain\_name | Public DNS name of the backend's Elastic IP, for CloudFront's origin. |
 | origin\_port | Port the backend answers on over HTTP, for CloudFront's origin. |
+| origin\_secret | Secret CloudFront sends in the X-Origin-Verify header, which the app requires on every request but its health checks. |
 | public\_ip | The backend's Elastic IP. |
 | repository\_url | URL of the ECR repository that deploys push the backend image to. |
 | security\_group\_id | Security group of the backend instance. |

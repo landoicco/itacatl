@@ -37,6 +37,7 @@
         <java.version>21</java.version>
         <spring-cloud-aws.version>4.2.1</spring-cloud-aws.version>
         <aws-advanced-jdbc-wrapper.version>4.4.0</aws-advanced-jdbc-wrapper.version>
+        <bucket4j.version>8.23.0</bucket4j.version>
     </properties>
     <dependencyManagement>
         <dependencies>
@@ -68,6 +69,23 @@
         <dependency>
             <groupId>io.awspring.cloud</groupId>
             <artifactId>spring-cloud-aws-starter-secrets-manager</artifactId>
+        </dependency>
+        <!-- AWS only (aws profile): application settings from SSM Parameter Store, such as the
+             secret CloudFront sends to prove a request went through it -->
+        <dependency>
+            <groupId>io.awspring.cloud</groupId>
+            <artifactId>spring-cloud-aws-starter-parameter-store</artifactId>
+        </dependency>
+        <!-- Sign-in rate limiting: token buckets per address and per email, kept in a bounded
+             Caffeine cache that forgets idle keys -->
+        <dependency>
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j_jdk17-core</artifactId>
+            <version>${bucket4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
         </dependency>
         <!-- AWS only (aws profile): itacatl_app signs in with an IAM token, which the wrapper's iam
              plugin generates with the AWS SDK's RDS module for each new connection -->

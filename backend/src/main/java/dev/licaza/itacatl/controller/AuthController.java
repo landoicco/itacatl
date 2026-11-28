@@ -7,6 +7,7 @@ import dev.licaza.itacatl.security.SessionLogin;
 import dev.licaza.itacatl.service.AccountService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -29,7 +30,7 @@ public class AuthController {
 
   @PostMapping("/login")
   public ResponseEntity<CurrentUserDTO> login(
-      @RequestBody LoginRequestDTO credentials,
+      @Valid @RequestBody LoginRequestDTO credentials,
       HttpServletRequest request,
       HttpServletResponse response) {
     AccountPrincipal principal =

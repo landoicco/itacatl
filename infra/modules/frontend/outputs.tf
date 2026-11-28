@@ -13,14 +13,26 @@ output "distribution_domain_name" {
   value       = aws_cloudfront_distribution.this.domain_name
 }
 
+# The origins carry the secret header, so Terraform marks all of them sensitive. An address and a
+# port are not secret: nonsensitive says so, instead of hiding them from terraform output.
 output "api_origin_domain_name" {
   description = "Address CloudFront forwards /api/* to."
-  value       = one([for origin in aws_cloudfront_distribution.this.origin : origin.domain_name if origin.origin_id == local.api_origin])
+  value       = nonsensitive(one([for origin in aws_cloudfront_distribution.this.origin : origin.domain_name if origin.origin_id == local.api_origin]))
 }
 
 output "api_origin_port" {
   description = "Port CloudFront forwards /api/* to, over HTTP."
-  value       = one([for origin in aws_cloudfront_distribution.this.origin : origin.custom_origin_config[0].http_port if origin.origin_id == local.api_origin])
+  value       = nonsensitive(one([for origin in aws_cloudfront_distribution.this.origin : origin.custom_origin_config[0].http_port if origin.origin_id == local.api_origin]))
+}
+
+output "api_origin_secret" {
+  description = "Value of the X-Origin-Verify header CloudFront adds to every request to /api/*."
+  value = one(flatten([
+    for origin in aws_cloudfront_distribution.this.origin : [
+      for header in origin.custom_header : header.value if header.name == "X-Origin-Verify"
+    ] if origin.origin_id == local.api_origin
+  ]))
+  sensitive = true
 }
 
 output "url" {

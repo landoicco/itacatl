@@ -6,13 +6,12 @@ Where the work stands, what comes next, and what is still undecided. It is the e
 
 - **Released:** [v0.2.0](https://github.com/landoicco/itacatl/releases), tenant isolation (slices 1 to 3 of the [rework roadmap](product-spec.md#rework-roadmap)).
 - **Infrastructure:** Phase 1 (bootstrap) of the [infra plan](infra-plan.md#work-phases) is done, and so are Phase 2's modules, one PR each, except `notifications`. Nothing is deployed: the infrastructure is ready but off ([Terraform guide](terraform.md)), and must stay under a hard ceiling of $30/month when running, with the database never cut back to save money ([cost rules](infra-plan.md#cost-rules)).
-- **Latest:** the `observability` module (seven CloudWatch alarms emailed through SNS and one dashboard, all within the free tier), with the CloudWatch agent for memory and disk and a watchdog that has a hung app's instance replaced, both in the `backend` module. Before it, the `frontend` module (S3 and one CloudFront distribution, the domain an optional deployment setting), the `backend` module with the `aws` profile's IAM sign-in to RDS, Trivy in CI, the `database` and `network` modules and the `envs/prod` stack.
+- **Latest:** both open decisions settled and built: a secret origin header, so only this CloudFront distribution reaches the backend ([ADR 0006](adr/0006-origin-secret-header.md)), and sign-in rate limiting per address and per email with Bucket4j ([security](security.md#sign-in-rate-limiting)). Before them, the `observability` module (seven CloudWatch alarms and one dashboard, within the free tier, with the CloudWatch agent and a watchdog in the `backend` module), the `frontend` module (S3 and one CloudFront distribution, the domain an optional deployment setting), the `backend` module with the `aws` profile's IAM sign-in to RDS, Trivy in CI, the `database` and `network` modules and the `envs/prod` stack.
 - **Goal:** the infrastructure is finished when it is [deploy-ready](infra-plan.md#definition-of-done), with nothing created in AWS until the maintainer decides to launch.
 - **Next**, in this order:
-  1. The [open decisions](#open-decisions): encrypting CloudFront's hop to the backend, and rate limiting.
-  2. Phase 3: Infracost and the arm64 image build in CI.
-  3. Closing the runbook: the first-apply checks of every module gathered in one place, and the list of account prerequisites created by hand (hosted zone, AWS Budgets, the maintainer's sign-in).
-  4. `notifications` waits until slices 5 and 6 need it.
+  1. Phase 3: Infracost and the arm64 image build in CI.
+  2. Closing the runbook: the first-apply checks of every module gathered in one place, and the list of account prerequisites created by hand (hosted zone, AWS Budgets, the maintainer's sign-in).
+  3. `notifications` waits until slices 5 and 6 need it.
 
   Slice 4 of the roadmap (cash reservations) comes after, or in between if the maintainer prefers.
 
@@ -20,9 +19,7 @@ Where the work stands, what comes next, and what is still undecided. It is the e
 
 Not settled yet; each needs the maintainer's call before the work that depends on it.
 
-- **Infrastructure:** the [open decisions of the infra plan](infra-plan.md#open-decisions):
-  - Rate limiting: CloudFront's flat-rate plan with WAF, or Bucket4j in Spring.
-  - **Encrypting CloudFront's hop to the backend**, which today is plain HTTP with session cookies and sign-in passwords, to a security group that admits any distribution. To settle before launch.
+- **None open.** The infra plan's last two, rate limiting and the hop from CloudFront to the backend, are settled ([infra plan](infra-plan.md#open-decisions)).
 
   The production domain is not among them: it is a deployment setting, chosen by whoever launches.
 
@@ -38,7 +35,6 @@ Known gaps, each with the work it belongs to.
 | A public write, such as a reservation, gets the `NONE` tenant scope until it is given one on purpose ([tenant isolation](tenant-isolation.md#the-interceptor-and-the-url-rules)) | Slice 4 |
 | The owner panel's menu list has no upper bound or history ("see past menus") | When menus pile up |
 | Creating a catalog item from the menu editor | Owner panel polish |
-| Sign-in rate limiting ([security](security.md#known-limitations)) | Depends on an infra open decision |
 | The arm64 image, the one that runs in AWS, is not built in CI | Phase 3 of the [infra plan](infra-plan.md#phase-3-ci) |
 | The slug is resolved more than once per management request ([tenant isolation](tenant-isolation.md#known-limitations)) | Only if it shows up in profiling |
 
@@ -56,3 +52,5 @@ Neither planned nor dropped: they are kept here so later designs don't close the
   - An alarm on the backend's `CPUSurplusCreditsCharged`, in case a type ignores the standard credit mode.
   - A few application metrics through Micrometer (JVM heap, HTTP latency, connection pool), filtered to two or three, since each costs about $0.30 a month.
   - Database Insights in its free Standard mode, if `db.t4g.micro` supports it.
+- **Edge protection through CloudFront's free flat-rate plan**, which includes WAF with IP rate limiting and caps the bill with no overage charges. To confirm before relying on it: whether the plan can be managed with Terraform, and whether it allows a custom origin header ([security](security.md#sign-in-rate-limiting)).
+- **TLS on the hop from CloudFront to the backend**, once a deployment has its own domain: a certificate for an origin name, kept across spot replacements ([ADR 0006](adr/0006-origin-secret-header.md)).

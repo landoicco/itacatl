@@ -9,6 +9,7 @@ variables {
   name                       = "itacatl-test"
   backend_origin_domain_name = "ec2-192-0-2-10.compute-1.amazonaws.com"
   backend_origin_port        = 8080
+  backend_origin_secret      = "test-origin-secret"
 }
 
 run "the_bucket_is_private_and_named_per_account" {
@@ -108,6 +109,25 @@ run "the_api_goes_to_the_backend_uncached" {
       origin.custom_origin_config[0].http_port == var.backend_origin_port
     ])
     error_message = "The backend's origin must be its address, on the port it is given."
+  }
+
+  assert {
+    condition = anytrue([
+      for origin in aws_cloudfront_distribution.this.origin :
+      origin.origin_id == "backend" && anytrue([
+        for header in origin.custom_header :
+        header.name == "X-Origin-Verify" && header.value == var.backend_origin_secret
+      ])
+    ])
+    error_message = "Every request to the backend must carry the origin secret, the only proof it came through this distribution."
+  }
+
+  assert {
+    condition = alltrue([
+      for origin in aws_cloudfront_distribution.this.origin :
+      length(origin.custom_header) == 0 if origin.origin_id != "backend"
+    ])
+    error_message = "The origin secret must go only to the backend, never to S3."
   }
 }
 
