@@ -72,7 +72,7 @@ Spring Security prints the chain at startup with `logging.level.org.springframew
 | `exception/GlobalExceptionHandler.java` | Security errors as Problem Details with stable codes |
 | `db/migration/V2__create_accounts.sql` | `app_user` and `membership` |
 | `db/migration/V3__create_session_tables.sql` | Spring Session's tables |
-| `security/SignInRateLimiter.java`, `exception/TooManyAttemptsException.java` | Sign-in attempts per address and per email ([rate limiting](#sign-in-rate-limiting)) |
+| `security/SignInRateLimiter.java`, `exception/TooManyAttemptsException.java` | Sign-in attempts per address, and per email from each address ([rate limiting](#sign-in-rate-limiting)) |
 | `security/OriginVerificationFilter.java`, `security/OriginVerificationConfig.java` | In AWS, only requests through this CloudFront distribution ([origin verification](#origin-verification)) |
 | `application.properties`, `application-aws.properties` | Session timeout and sign-in limits; in AWS, `Secure` cookies, the forwarded client address and the origin check |
 
@@ -254,17 +254,21 @@ bcrypt makes each guess slow, but nothing stopped a script from making guesses o
 | Bucket | Default | Stops |
 |---|---|---|
 | Per client address | 10 attempts per 15 minutes | One machine trying many accounts (password spraying) |
-| Per email | 5 attempts per 15 minutes | Many machines trying one account (credential stuffing) |
+| Per email, from each address | 5 attempts per 15 minutes | One machine guessing one account's password |
+
+**Why the email bucket is also per address.** A bucket per email alone would also slow many machines trying one account, but anyone who knows an owner's email could keep it empty, one attempt every three minutes, and lock the owner out of their own account for as long as they liked. Keyed by email and address, the attempts an attacker spends never reach the owner, who signs in from elsewhere. Spreading the guesses for one account over many addresses is still slowed by each address's own bucket and by bcrypt.
 
 How it is wired in:
 
-- **`SessionLogin` calls it first**, before the password is checked. A limited attempt answers `429 TOO_MANY_ATTEMPTS` with `Retry-After`, through `TooManyAttemptsException` and `GlobalExceptionHandler`. It is not an `AuthenticationException`, so it never reads as wrong credentials, and it reveals nothing about the account.
+- **`SessionLogin` calls it first**, before the password is checked. A limited attempt answers `429 TOO_MANY_ATTEMPTS` with `Retry-After`, through `TooManyAttemptsException` and `GlobalExceptionHandler`. It is not an `AuthenticationException`, so it never reads as wrong credentials, and it reveals nothing about the account. Blank credentials are rejected earlier, as `400 VALIDATION_FAILED` (`@NotBlank` on `LoginRequestDTO`).
+- **Both buckets or neither.** The limiter estimates both buckets first and takes a token only if both have one, so an attempt refused for its email does not also spend its address's attempts on other accounts.
 - **Every attempt counts**, successful or not: simpler, and an owner signs in a few times a day.
 - **Emails are normalized** with `AppUser.normalizeEmail`, so case and spaces do not buy more attempts.
-- **The buckets live in memory**, in a Caffeine cache bounded to 10,000 keys that forgets a key idle for a whole window, when its bucket is full again anyway. That is enough with one instance; a replacement starts with fresh buckets, which an attacker cannot time.
+- **IPv6 clients are counted by their /64**, the block a provider usually hands each customer, since one client can use any address in it. IPv4 addresses stay whole, because many clients may share one behind a NAT.
+- **The buckets live in memory**, in two Caffeine caches, one per kind of bucket, so a flood of one kind never evicts the other. Each is bounded to 10,000 keys, evicting those least likely to be used again (W-TinyLFU), and forgets a key idle for a whole window, when its bucket is full again anyway. That is enough with one instance; a replacement starts with fresh buckets, which an attacker cannot time.
 - **Time comes from the injected `Clock`**, through a Bucket4j `TimeMeter`, like the rest of the app ([conventions](../AGENTS.md#conventions)), so the unit tests move time instead of sleeping.
 - **The client address.** Locally it is the connection's. Behind CloudFront every connection comes from CloudFront, which appends the viewer's address to `X-Forwarded-For`; the `aws` profile (`itacatl.sign-in.trust-forwarded-for`) takes its **last** entry, the one CloudFront saw. Earlier entries are whatever the client sent. Trusting the header is safe only because of the [origin verification](#origin-verification): nothing reaches the app without going through CloudFront.
-- **Settings:** `itacatl.sign-in.attempts-per-address`, `attempts-per-email` and `window`. The test profile lifts the limits, because many tests sign in from the same address in one shared context.
+- **Settings:** `itacatl.sign-in.attempts-per-address`, `attempts-per-email` (per address, as above) and `window`. The test profile lifts the limits, because many tests sign in from the same address in one shared context.
 
 Why Spring and not CloudFront's WAF: WAF bills monthly outside CloudFront's flat-rate plans and counts only per address, while a credential-stuffing attack spreads over many. The cost is that limited requests still reach the instance; an edge limit is a later option ([status](status.md#parked-ideas)).
 
@@ -272,7 +276,7 @@ Why Spring and not CloudFront's WAF: WAF bills monthly outside CloudFront's flat
 
 CloudFront reaches the instance over plain HTTP, and the instance's security group admits CloudFront's addresses, which serve **every** AWS customer's distributions. Anyone could point a distribution of their own at the instance and skip this one's settings. So this distribution adds a secret header to every request it forwards, and the app requires it:
 
-- **`OriginVerificationFilter`** compares `X-Origin-Verify` with `itacatl.origin.secret` in constant time and answers `403` otherwise. It runs before every other filter, Spring Security's included, so a request that skipped CloudFront gets nothing, not even a CSRF cookie. `/actuator/health/**` is exempt, because the instance checks it on localhost.
+- **`OriginVerificationFilter`** compares `X-Origin-Verify` with `itacatl.origin.secret` in constant time and answers `403` otherwise. It runs before every other filter, Spring Security's included, so a request that skipped CloudFront gets nothing, not even a CSRF cookie. Only the exact health paths the instance calls itself are exempt (`/actuator/health`, `/liveness`, `/readiness`), compared before any normalization, and they show only `UP` or `DOWN`. The exemption cannot be limited to localhost: Docker's port mapping makes the instance's own calls arrive from the bridge's address. Rejections are logged at `debug`, because anyone's distribution can send them and CloudWatch bills each GB of logs.
 - **Only in AWS.** `OriginVerificationConfig` registers it when `itacatl.origin.verify` is true, which the `aws` profile sets. Without the secret the app does not start, rather than run unprotected; a blank one is refused.
 - **The secret** is generated by Terraform (`random_password` in the `backend` module), stored as an SSM SecureString and read by the app at start through Spring Cloud AWS Parameter Store. CloudFront gets it as a custom origin header, and replaces any header of the same name that a viewer sends ([backend](../infra/modules/backend/README.md), [frontend](../infra/modules/frontend/README.md) modules, [aws profile](aws-profile.md)).
 
@@ -301,7 +305,7 @@ What it does not do is encrypt the hop. TLS to the instance needs a certificate 
 
 ## Known limitations
 
-- **The per-email bucket can lock an owner out for up to 15 minutes**: anyone who knows the email can spend its attempts. The usual trade-off of per-account limits, accepted for a short window.
+- **Owners behind one shared address** (an office or a mobile carrier's NAT) share its 10 attempts every 15 minutes; a script spending them there limits the others too, though never from anywhere else.
 - **Only sign-in is rate-limited.** Other public endpoints are read-only and cheap; a general limit would go to the edge.
 - **The hop from CloudFront to the instance is not encrypted** ([ADR 0006](adr/0006-origin-secret-header.md)).
 - **Disabling an account does not end its open sessions**; they last until they expire. Signing the user out everywhere (above) would close the gap.
@@ -311,10 +315,10 @@ What it does not do is encrypt the hop. TLS to the instance needs a certificate 
 
 | Test | What it proves |
 |---|---|
-| `AuthControllerIntegrationTest` | The whole flow over HTTP with the real filters, CSRF and sessions in PostgreSQL: sign-in like a browser, cookie flags, wrong password and unknown email give the same error, CSRF is required, sign-out ends the session, the marketplace stays public |
-| `SignInRateLimiterTest` | Each bucket limits on its own, an email's case and spaces share a bucket, attempts come back over the window, and only a trusted `X-Forwarded-For`'s last entry is the client |
+| `AuthControllerIntegrationTest` | The whole flow over HTTP with the real filters, CSRF and sessions in PostgreSQL: sign-in like a browser, cookie flags, wrong password and unknown email give the same error, blank credentials are a validation error, CSRF is required, sign-out ends the session, the marketplace stays public |
+| `SignInRateLimiterTest` | Each bucket limits on its own, an email limited from one address still signs in from another, a refused attempt spends neither bucket, IPv6 addresses count by their /64, an email's case and spaces share a bucket, attempts come back over the window, and only a trusted `X-Forwarded-For`'s last entry is the client |
 | `SignInRateLimitIntegrationTest` | Over HTTP, an attempt over the limit gets `429 TOO_MANY_ATTEMPTS` with `Retry-After` |
-| `OriginVerificationFilterTest` | Only the right secret goes through, health checks need none, a blank secret is refused |
+| `OriginVerificationFilterTest` | Only the right secret goes through, the exact health paths need none while look-alikes need it, a blank secret is refused |
 | `SecureCookiesIntegrationTest` | With the `aws` profile's setting, the session and CSRF cookies are `Secure` even though the request is plain HTTP, as CloudFront's are |
 | `AccountRepositoryIntegrationTest` | A user's businesses in one query, lowercase emails, one membership per user and business |
 | `BusinessAccessIntegrationTest` | Owners manage and view, staff only view, nobody reaches another business, anonymous gets nothing |
