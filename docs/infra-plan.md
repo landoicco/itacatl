@@ -38,7 +38,7 @@ flowchart LR
 - **Deploys:** the image tag lives in SSM Parameter Store; a deploy updates it and starts an ASG instance refresh. With a single instance this means a few minutes of downtime, accepted and documented.
 - **Configuration:** SSM Parameter Store (SecureString for secrets other than the database password).
 - **Access:** SSM Session Manager, no SSH.
-- **Observability:** CloudWatch Logs with short retention; the CloudWatch agent for the instance's memory and disk; alarms emailed through SNS (no backend in service, memory, disk, CloudFront 5xx, RDS CPU, credits and storage; DLQ depth with `notifications`) and one dashboard, all within the free tier.
+- **Observability:** CloudWatch Logs with short retention; the CloudWatch agent for the instance's memory and disk; alarms emailed through SNS (no backend in service, memory, disk, CloudFront 5xx, RDS CPU, billed surplus CPU and storage; DLQ depth with `notifications`) and one dashboard, all within the free tier.
 
 ### Inside the VPC
 
