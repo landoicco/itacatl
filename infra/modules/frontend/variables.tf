@@ -19,6 +19,13 @@ variable "backend_origin_port" {
   type        = number
 }
 
+variable "backend_origin_secret" {
+  description = "Secret CloudFront adds to every request to the backend in the X-Origin-Verify header; the backend module's origin_secret output."
+  type        = string
+  sensitive   = true
+  nullable    = false
+}
+
 variable "domain" {
   description = "The marketplace's own domain and its Route 53 hosted zone. Null serves it on CloudFront's *.cloudfront.net domain, with no certificate or DNS records; the domain is a deployment setting, chosen by whoever launches."
   type = object({

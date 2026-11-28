@@ -74,6 +74,11 @@ run "cloudfront_sends_the_api_to_the_backends_address" {
   }
 
   assert {
+    condition     = module.frontend.api_origin_secret == module.backend.origin_secret
+    error_message = "CloudFront must send the backend the secret the backend checks."
+  }
+
+  assert {
     condition     = module.frontend.url == "https://${module.frontend.distribution_domain_name}"
     error_message = "Without a domain, prod must be served on CloudFront's own."
   }

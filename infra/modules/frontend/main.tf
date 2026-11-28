@@ -184,9 +184,10 @@ resource "aws_route53_record" "alias" {
 
 # --- The distribution ---
 
-# No access logs, which bill for their storage. WAF waits on the rate limiting decision.
+# No access logs, which bill for their storage. No WAF, which bills monthly: the app limits
+# sign-in attempts itself.
 #trivy:ignore:AVD-AWS-0010 Access logs bill for their storage; CloudWatch's basic metrics are enough
-#trivy:ignore:AVD-AWS-0011 WAF bills monthly; rate limiting is an open decision of the infra plan
+#trivy:ignore:AVD-AWS-0011 WAF bills monthly; the app rate-limits sign-ins itself (Bucket4j)
 resource "aws_cloudfront_distribution" "this" {
   enabled         = true
   comment         = "${var.name}: the app and /api on one origin"
@@ -209,6 +210,14 @@ resource "aws_cloudfront_distribution" "this" {
   origin {
     origin_id   = local.api_origin
     domain_name = var.backend_origin_domain_name
+
+    # The security group admits any distribution; the app admits only requests with this header,
+    # which only this one adds (OriginVerificationFilter). CloudFront replaces a header of the same
+    # name sent by the viewer, so a client cannot supply its own.
+    custom_header {
+      name  = "X-Origin-Verify"
+      value = var.backend_origin_secret
+    }
 
     custom_origin_config {
       origin_protocol_policy = "http-only"
