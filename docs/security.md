@@ -89,7 +89,7 @@ Dependencies: `spring-boot-starter-security`, `spring-boot-starter-session-jdbc`
 - **The first matching rule wins**, so specific rules go before general ones.
 - **Closed by default:** every `/api` endpoint needs a signed-in user unless it is listed as public, and any other path is denied. A new endpoint is never public by accident.
 - `/error` is public because Spring Boot forwards errors there; denying it would hide the real error behind a 401.
-- `/actuator/health` is public for the container health check.
+- `/actuator/health` and its liveness probe (`/actuator/health/liveness`) are public: the backend instance checks the first before going into service, and its watchdog the second afterwards ([backend module](../infra/modules/backend/README.md)).
 
 ### Accounts, memberships and permissions
 
