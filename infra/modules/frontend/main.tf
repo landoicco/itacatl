@@ -184,8 +184,8 @@ resource "aws_route53_record" "alias" {
 
 # --- The distribution ---
 
-# Logs and WAF are decided with the observability module and the rate limiting decision.
-#trivy:ignore:AVD-AWS-0010 Access logs bill for their storage; decided with the observability module
+# No access logs, which bill for their storage. WAF waits on the rate limiting decision.
+#trivy:ignore:AVD-AWS-0010 Access logs bill for their storage; CloudWatch's basic metrics are enough
 #trivy:ignore:AVD-AWS-0011 WAF bills monthly; rate limiting is an open decision of the infra plan
 resource "aws_cloudfront_distribution" "this" {
   enabled         = true

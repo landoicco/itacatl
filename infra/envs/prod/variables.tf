@@ -31,3 +31,8 @@ variable "domain" {
   })
   default = null
 }
+
+variable "alarm_email" {
+  description = "Address the alarms are sent to, set by whoever launches (git-ignored terraform.tfvars). AWS emails it a confirmation link that must be followed."
+  type        = string
+}

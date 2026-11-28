@@ -23,6 +23,10 @@ override_resource {
   }
 }
 
+variables {
+  alarm_email = "alerts@example.com"
+}
+
 run "resources_are_named_after_the_project_and_env" {
   command = plan
 
@@ -72,6 +76,30 @@ run "cloudfront_sends_the_api_to_the_backends_address" {
   assert {
     condition     = module.frontend.url == "https://${module.frontend.distribution_domain_name}"
     error_message = "Without a domain, prod must be served on CloudFront's own."
+  }
+}
+
+# Applied against the mock, because the distribution's ID is unknown in a plan.
+run "the_alarms_watch_this_environments_resources" {
+  command = apply
+
+  assert {
+    condition = (
+      length(module.observability.alarms) > 0 &&
+      alltrue([for name, _ in module.observability.alarms : startswith(name, "${local.name}-")])
+    )
+    error_message = "The alarms must be named after the environment."
+  }
+
+  assert {
+    condition = alltrue([
+      for alarm in module.observability.alarms :
+      alarm.namespace == module.backend.metrics_namespace ||
+      try(alarm.dimensions.AutoScalingGroupName == module.backend.autoscaling_group_name, false) ||
+      try(alarm.dimensions.DBInstanceIdentifier == module.database.identifier, false) ||
+      try(alarm.dimensions.DistributionId == module.frontend.distribution_id, false)
+    ])
+    error_message = "Every alarm must watch this environment's backend group or instance, database or distribution."
   }
 }
 

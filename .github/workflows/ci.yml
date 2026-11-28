@@ -109,6 +109,11 @@ jobs:
           terraform -chdir=infra/modules/frontend init -backend=false -input=false
           terraform -chdir=infra/modules/frontend validate
           terraform -chdir=infra/modules/frontend test
+      - name: modules/observability
+        run: |
+          terraform -chdir=infra/modules/observability init -backend=false -input=false
+          terraform -chdir=infra/modules/observability validate
+          terraform -chdir=infra/modules/observability test
       - name: envs/prod
         run: |
           terraform -chdir=infra/envs/prod init -backend=false -input=false

@@ -1,0 +1,11 @@
+# Copy to terraform.tfvars (git-ignored) and fill in: cp terraform.tfvars.example terraform.tfvars
+
+# Required: where the alarms are emailed. AWS sends it a confirmation link to follow.
+alarm_email = "alerts@example.com"
+
+# Optional: the business's own domain, whose hosted zone already exists in Route 53. Without it,
+# the marketplace is served on CloudFront's *.cloudfront.net domain.
+# domain = {
+#   name    = "shop.example.com"
+#   zone_id = "Z0123456789ABCDEFGHIJ" # aws route53 list-hosted-zones
+# }
