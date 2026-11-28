@@ -32,14 +32,17 @@ public class SessionLogin {
   private final AuthenticationManager authenticationManager;
   private final SessionAuthenticationStrategy sessionAuthenticationStrategy;
   private final SecurityContextRepository securityContextRepository;
+  private final SignInRateLimiter rateLimiter;
 
   public SessionLogin(
       AuthenticationManager authenticationManager,
       SessionAuthenticationStrategy sessionAuthenticationStrategy,
-      SecurityContextRepository securityContextRepository) {
+      SecurityContextRepository securityContextRepository,
+      SignInRateLimiter rateLimiter) {
     this.authenticationManager = authenticationManager;
     this.sessionAuthenticationStrategy = sessionAuthenticationStrategy;
     this.securityContextRepository = securityContextRepository;
+    this.rateLimiter = rateLimiter;
   }
 
   /**
@@ -49,9 +52,12 @@ public class SessionLogin {
    * @return the signed-in account
    * @throws AuthenticationException if the credentials are wrong or the account is disabled;
    *     GlobalExceptionHandler answers 401 INVALID_CREDENTIALS
+   * @throws dev.licaza.itacatl.exception.TooManyAttemptsException if the address or the email has
+   *     no attempts left; checked before the password, so a limited attempt reveals nothing
    */
   public AccountPrincipal signIn(
       String email, String password, HttpServletRequest request, HttpServletResponse response) {
+    rateLimiter.check(email, request);
     Authentication authentication;
     try {
       authentication =

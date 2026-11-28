@@ -1,8 +1,10 @@
 package dev.licaza.itacatl.exception;
 
 import dev.licaza.itacatl.dto.FieldErrorDTO;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.InsufficientAuthenticationException;
@@ -77,6 +79,21 @@ public class GlobalExceptionHandler {
         "Invalid credentials",
         "Email or password is incorrect",
         "INVALID_CREDENTIALS");
+  }
+
+  // Sign-in attempts over the limit. Retry-After says when the next one is allowed, rounded up so
+  // a client that waits that long is never rejected again
+  @ExceptionHandler(TooManyAttemptsException.class)
+  public ResponseEntity<ProblemDetail> handleTooManyAttempts(TooManyAttemptsException ex) {
+    long seconds = Math.max(1, (ex.getRetryAfter().toMillis() + 999) / 1000);
+    return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+        .header(HttpHeaders.RETRY_AFTER, Long.toString(seconds))
+        .body(
+            problem(
+                HttpStatus.TOO_MANY_REQUESTS,
+                "Too many attempts",
+                ex.getMessage(),
+                "TOO_MANY_ATTEMPTS"));
   }
 
   // A state-changing request without a valid CSRF token; the client should reload the token
