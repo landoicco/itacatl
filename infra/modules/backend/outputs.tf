@@ -47,3 +47,9 @@ output "metrics_namespace" {
   description = "CloudWatch namespace of the instance's memory and disk metrics, published by the CloudWatch agent."
   value       = local.metrics_namespace
 }
+
+output "origin_secret" {
+  description = "Secret CloudFront sends in the X-Origin-Verify header, which the app requires on every request but its health checks."
+  value       = random_password.origin_secret.result
+  sensitive   = true
+}

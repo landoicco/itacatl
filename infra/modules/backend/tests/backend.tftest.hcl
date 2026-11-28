@@ -229,6 +229,46 @@ run "the_instance_reports_what_ec2_does_not" {
   }
 }
 
+# Applied, because the password is only generated then.
+run "the_origin_secret_is_kept_encrypted_where_the_app_reads_it" {
+  command = apply
+
+  assert {
+    condition = (
+      aws_ssm_parameter.origin_secret.type == "SecureString" &&
+      aws_ssm_parameter.origin_secret.name == "/itacatl-test/backend/app/itacatl.origin.secret"
+    )
+    error_message = "The origin secret must be a SecureString named after its Spring property, under the app's parameter path."
+  }
+
+  assert {
+    condition     = length(random_password.origin_secret.result) >= 32
+    error_message = "The origin secret must be long enough not to be guessed."
+  }
+}
+
+# Applied against the mock, because the user data and the policy name resources that are unknown
+# in a plan.
+run "the_app_reads_only_its_own_settings" {
+  command = apply
+
+  assert {
+    condition     = strcontains(base64decode(aws_launch_template.this.user_data), "APP_PARAMETERS_PATH=\"/itacatl-test/backend/app/\"")
+    error_message = "The user data must pass the app its parameter path."
+  }
+
+  assert {
+    condition = anytrue([
+      for statement in jsondecode(aws_iam_role_policy.this.policy).Statement :
+      contains(statement.Action, "ssm:GetParametersByPath") && alltrue([
+        for resource in statement.Resource : strcontains(resource, ":parameter/itacatl-test/backend/app")
+      ])
+      if statement.Sid == "ReadTheAppSettings"
+    ])
+    error_message = "The instance must read parameters only under the app's path, never the rest of the account's."
+  }
+}
+
 run "images_are_immutable_and_scanned" {
   command = plan
 

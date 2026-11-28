@@ -13,6 +13,10 @@ locals {
   # Where the CloudWatch agent publishes the instance's memory and disk, which EC2 does not report.
   metrics_namespace = "${var.name}/backend"
 
+  # Parameter Store path the app imports its settings from. Not /<name>/backend/ itself, which
+  # also holds the image tag, a setting of the instance and not of the app.
+  app_parameters_path = "/${var.name}/backend/app/"
+
   account_id = data.aws_caller_identity.current.account_id
   partition  = data.aws_partition.current.partition
   region     = data.aws_region.current.region
@@ -89,6 +93,27 @@ resource "aws_ssm_parameter" "image_tag" {
   lifecycle {
     ignore_changes = [value]
   }
+}
+
+# --- Application settings ---
+
+# Parameters under this path are read by the app at start, each named after the Spring property it
+# sets (Spring Cloud AWS Parameter Store, the aws profile).
+resource "aws_ssm_parameter" "origin_secret" {
+  name        = "${local.app_parameters_path}itacatl.origin.secret"
+  description = "Secret CloudFront sends in X-Origin-Verify; the backend rejects requests without it"
+  # Encrypted with SSM's own key, which has no monthly charge.
+  type  = "SecureString"
+  value = random_password.origin_secret.result
+}
+
+# The security group admits every CloudFront distribution, other accounts' included; this secret,
+# which only this deployment's distribution adds, is what the app checks. It lives in the state,
+# which is encrypted and private. Rotating it: replace it with -replace, apply, and start an
+# instance refresh, since the app reads it only at start.
+resource "random_password" "origin_secret" {
+  length  = 48
+  special = false
 }
 
 # --- The instance's address ---
@@ -215,6 +240,17 @@ resource "aws_iam_role_policy" "this" {
         Resource = aws_ssm_parameter.image_tag.arn
       },
       {
+        # GetParametersByPath is authorized against the path; the parameters under it are named
+        # for clients that read them one by one. SSM's own key needs no kms:Decrypt grant.
+        Sid    = "ReadTheAppSettings"
+        Effect = "Allow"
+        Action = ["ssm:GetParametersByPath", "ssm:GetParameters", "ssm:GetParameter"]
+        Resource = [
+          "arn:${local.partition}:ssm:${local.region}:${local.account_id}:parameter${trimsuffix(local.app_parameters_path, "/")}",
+          "arn:${local.partition}:ssm:${local.region}:${local.account_id}:parameter${local.app_parameters_path}*",
+        ]
+      },
+      {
         Sid      = "ReadTheMasterCredentials"
         Effect   = "Allow"
         Action   = "secretsmanager:GetSecretValue"
@@ -329,6 +365,7 @@ resource "aws_launch_template" "this" {
     autoscaling_group   = local.autoscaling_group_name
     lifecycle_hook      = local.lifecycle_hook_name
     metrics_namespace   = local.metrics_namespace
+    app_parameters_path = local.app_parameters_path
     app_port            = local.app_port
     database_host       = var.database_address
     database_name       = var.database_name

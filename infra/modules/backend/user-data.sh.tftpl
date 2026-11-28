@@ -81,6 +81,7 @@ docker run --detach --name backend --restart unless-stopped \
   --env DB_HOST="${database_host}" \
   --env DB_NAME="${database_name}" \
   --env DB_MASTER_SECRET_ARN="${master_secret_arn}" \
+  --env APP_PARAMETERS_PATH="${app_parameters_path}" \
   "${repository_url}:$tag"
 
 # While the app boots, so the agent adds nothing to a deploy's time without the backend
