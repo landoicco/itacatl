@@ -39,8 +39,21 @@ class OriginVerificationFilterTest {
 
   @Test
   void theInstancesHealthChecks_NeedNoSecret() throws Exception {
-    for (String path : new String[] {"/actuator/health", "/actuator/health/liveness"}) {
+    for (String path :
+        new String[] {
+          "/actuator/health", "/actuator/health/liveness", "/actuator/health/readiness"
+        }) {
       assertNotNull(filter(request(path)).chain().getRequest(), path + " must stay reachable");
+    }
+  }
+
+  @Test
+  void pathsThatOnlyLookLikeHealthChecks_NeedTheSecret() throws Exception {
+    for (String path :
+        new String[] {
+          "/actuator/healthx", "/actuator/health/db", "/actuator/health/..;/api/businesses"
+        }) {
+      assertEquals(403, filter(request(path)).response().getStatus(), path + " must be rejected");
     }
   }
 

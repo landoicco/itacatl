@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -24,6 +25,10 @@ public class OriginVerificationFilter extends OncePerRequestFilter {
   public static final String HEADER = "X-Origin-Verify";
 
   private static final Logger log = LoggerFactory.getLogger(OriginVerificationFilter.class);
+
+  // What the instance's user data and watchdog call; they show only UP or DOWN
+  private static final Set<String> HEALTH_PATHS =
+      Set.of("/actuator/health", "/actuator/health/liveness", "/actuator/health/readiness");
 
   private final byte[] secret;
 
@@ -45,14 +50,17 @@ public class OriginVerificationFilter extends OncePerRequestFilter {
       chain.doFilter(request, response);
       return;
     }
-    log.warn("❌ Request without CloudFront's origin header rejected");
+    // Debug, not warn: anyone's distribution can send these, and CloudWatch bills each GB of logs
+    log.debug("Request without CloudFront's origin header rejected");
     // No Problem Detail: only clients that skipped CloudFront see it, never the app
     response.sendError(HttpStatus.FORBIDDEN.value());
   }
 
-  // The instance checks its own health on localhost, without CloudFront
+  // The instance checks its own health without CloudFront. Exact paths only, compared before any
+  // normalization, so nothing else that starts with them gets through. It cannot be limited to
+  // localhost: Docker's port mapping makes the instance's calls arrive from the bridge's address
   @Override
   protected boolean shouldNotFilter(HttpServletRequest request) {
-    return request.getRequestURI().startsWith("/actuator/health");
+    return HEALTH_PATHS.contains(request.getRequestURI());
   }
 }

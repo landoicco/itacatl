@@ -117,6 +117,16 @@ class AuthControllerIntegrationTest {
   }
 
   @Test
+  void signIn_WithABlankEmail_IsAValidationError() throws Exception {
+    mockMvc
+        .perform(signIn(" ", PASSWORD))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+        .andExpect(jsonPath("$.errors[0].field").value("email"))
+        .andExpect(jsonPath("$.errors[0].code").value("NotBlank"));
+  }
+
+  @Test
   void signIn_WithoutACsrfToken_IsRejected() throws Exception {
     mockMvc
         .perform(

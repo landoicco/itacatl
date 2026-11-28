@@ -81,13 +81,11 @@ public class GlobalExceptionHandler {
         "INVALID_CREDENTIALS");
   }
 
-  // Sign-in attempts over the limit. Retry-After says when the next one is allowed, rounded up so
-  // a client that waits that long is never rejected again
+  // Sign-in attempts over the limit. Retry-After says in how many seconds the next one is allowed
   @ExceptionHandler(TooManyAttemptsException.class)
   public ResponseEntity<ProblemDetail> handleTooManyAttempts(TooManyAttemptsException ex) {
-    long seconds = Math.max(1, (ex.getRetryAfter().toMillis() + 999) / 1000);
     return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-        .header(HttpHeaders.RETRY_AFTER, Long.toString(seconds))
+        .header(HttpHeaders.RETRY_AFTER, Long.toString(ex.getRetryAfterSeconds()))
         .body(
             problem(
                 HttpStatus.TOO_MANY_REQUESTS,
