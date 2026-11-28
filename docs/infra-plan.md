@@ -16,7 +16,7 @@ Assumptions: the account has no credits or 12-month free tier (only *always-free
 flowchart LR
     user([Browser]) -->|"app domain<br/>Route 53 alias, ACM"| cf[CloudFront]
     cf -->|"/* (OAC)"| s3[("S3<br/>frontend build")]
-    cf -->|"/api/*<br/>CloudFront prefix list only"| ec2
+    cf -->|"/api/*<br/>CloudFront prefix list only,<br/>secret origin header"| ec2
     subgraph vpc ["VPC: 2 AZs, no NAT"]
         subgraph public [public subnets]
             ec2["EC2 Auto Scaling group<br/>min = max = 1, spot"]
@@ -44,7 +44,7 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-    cf[CloudFront] -->|"HTTP, from the CloudFront prefix list only"| ec2
+    cf[CloudFront] -->|"HTTP, from the CloudFront prefix list only,<br/>with the secret origin header"| ec2
     subgraph vpc ["VPC 10.0.0.0/16 (network)"]
         igw["Internet gateway"]
         subgraph z1 ["Zone 1"]
@@ -204,7 +204,6 @@ One PR per module, in this order; each joins `envs/prod` in the same PR, so the 
 
 ## Open decisions
 
-- CloudFront flat-rate free plan (includes WAF) if compatible with an EC2 origin; otherwise rate limiting in Spring with Bucket4j.
-- Encrypting the hop from CloudFront to the backend. It runs over plain HTTP, session cookies and sign-in passwords included, and the backend's security group admits any CloudFront distribution, not only this one. Options: a secret origin header that the backend checks, with TLS on the instance (a certificate for a name CloudFront can verify), or a private origin, which would need a NAT gateway or VPC endpoints (cost rules). To settle before launch.
+None open. Settled: sign-in rate limiting in Spring with Bucket4j ([security](security.md#sign-in-rate-limiting)), and a secret origin header between CloudFront and the backend, with the hop left unencrypted ([ADR 0006](adr/0006-origin-secret-header.md)).
 
 The production domain is not a decision of the code: it depends on which business launches the marketplace, so it is a deployment setting, like the seed file. The `frontend` module takes it as an optional input and serves on CloudFront's own domain without one.

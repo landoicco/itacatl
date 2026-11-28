@@ -72,9 +72,11 @@ Spring Security prints the chain at startup with `logging.level.org.springframew
 | `exception/GlobalExceptionHandler.java` | Security errors as Problem Details with stable codes |
 | `db/migration/V2__create_accounts.sql` | `app_user` and `membership` |
 | `db/migration/V3__create_session_tables.sql` | Spring Session's tables |
-| `application.properties`, `application-aws.properties` | Session timeout; `Secure` cookie in AWS |
+| `security/SignInRateLimiter.java`, `exception/TooManyAttemptsException.java` | Sign-in attempts per address and per email ([rate limiting](#sign-in-rate-limiting)) |
+| `security/OriginVerificationFilter.java`, `security/OriginVerificationConfig.java` | In AWS, only requests through this CloudFront distribution ([origin verification](#origin-verification)) |
+| `application.properties`, `application-aws.properties` | Session timeout and sign-in limits; in AWS, `Secure` cookies, the forwarded client address and the origin check |
 
-Dependencies: `spring-boot-starter-security`, `spring-boot-starter-session-jdbc` and, for tests, `spring-boot-starter-security-test`.
+Dependencies: `spring-boot-starter-security`, `spring-boot-starter-session-jdbc`, Bucket4j with Caffeine, Spring Cloud AWS Parameter Store (AWS only) and, for tests, `spring-boot-starter-security-test`.
 
 ### Access rules
 
@@ -173,6 +175,7 @@ Security errors happen inside filters, before Spring MVC, so `@RestControllerAdv
 |---|---|---|
 | `AUTHENTICATION_REQUIRED` | 401 | An endpoint that needs a signed-in user, called without a session |
 | `INVALID_CREDENTIALS` | 401 | A failed sign-in: unknown email, wrong password or disabled account |
+| `TOO_MANY_ATTEMPTS` | 429 | Too many sign-in attempts from one address or for one email; `Retry-After` says how many seconds to wait ([rate limiting](#sign-in-rate-limiting)) |
 | `CSRF_TOKEN_INVALID` | 403 | A state-changing request without a valid CSRF token |
 | `ACCESS_DENIED` | 403 | A signed-in user without that permission in the business: staff changing a menu, or anyone outside it |
 | `ACCOUNT_NOT_FOUND` | 404 | A session whose account was deleted |
@@ -244,6 +247,37 @@ A page on another origin cannot read the cookie (same-origin policy), so it cann
 
 **Is a cookie that JavaScript can read a risk?** Not for this purpose. The token only proves that a request comes from the app's own pages. A script injected into those pages (XSS) could read it, but it could also just send requests from the user's browser; XSS is prevented by React escaping output, not by CSRF tokens. The secret that must stay out of JavaScript's reach is the session ID, and that cookie is `HttpOnly`.
 
+## Sign-in rate limiting
+
+bcrypt makes each guess slow, but nothing stopped a script from making guesses one after another. `SignInRateLimiter` limits sign-in attempts with **token buckets** ([Bucket4j](https://bucket4j.com/)): each key has a bucket of tokens, each attempt takes one, and tokens come back gradually.
+
+| Bucket | Default | Stops |
+|---|---|---|
+| Per client address | 10 attempts per 15 minutes | One machine trying many accounts (password spraying) |
+| Per email | 5 attempts per 15 minutes | Many machines trying one account (credential stuffing) |
+
+How it is wired in:
+
+- **`SessionLogin` calls it first**, before the password is checked. A limited attempt answers `429 TOO_MANY_ATTEMPTS` with `Retry-After`, through `TooManyAttemptsException` and `GlobalExceptionHandler`. It is not an `AuthenticationException`, so it never reads as wrong credentials, and it reveals nothing about the account.
+- **Every attempt counts**, successful or not: simpler, and an owner signs in a few times a day.
+- **Emails are normalized** with `AppUser.normalizeEmail`, so case and spaces do not buy more attempts.
+- **The buckets live in memory**, in a Caffeine cache bounded to 10,000 keys that forgets a key idle for a whole window, when its bucket is full again anyway. That is enough with one instance; a replacement starts with fresh buckets, which an attacker cannot time.
+- **Time comes from the injected `Clock`**, through a Bucket4j `TimeMeter`, like the rest of the app ([conventions](../AGENTS.md#conventions)), so the unit tests move time instead of sleeping.
+- **The client address.** Locally it is the connection's. Behind CloudFront every connection comes from CloudFront, which appends the viewer's address to `X-Forwarded-For`; the `aws` profile (`itacatl.sign-in.trust-forwarded-for`) takes its **last** entry, the one CloudFront saw. Earlier entries are whatever the client sent. Trusting the header is safe only because of the [origin verification](#origin-verification): nothing reaches the app without going through CloudFront.
+- **Settings:** `itacatl.sign-in.attempts-per-address`, `attempts-per-email` and `window`. The test profile lifts the limits, because many tests sign in from the same address in one shared context.
+
+Why Spring and not CloudFront's WAF: WAF bills monthly outside CloudFront's flat-rate plans and counts only per address, while a credential-stuffing attack spreads over many. The cost is that limited requests still reach the instance; an edge limit is a later option ([status](status.md#parked-ideas)).
+
+## Origin verification
+
+CloudFront reaches the instance over plain HTTP, and the instance's security group admits CloudFront's addresses, which serve **every** AWS customer's distributions. Anyone could point a distribution of their own at the instance and skip this one's settings. So this distribution adds a secret header to every request it forwards, and the app requires it:
+
+- **`OriginVerificationFilter`** compares `X-Origin-Verify` with `itacatl.origin.secret` in constant time and answers `403` otherwise. It runs before every other filter, Spring Security's included, so a request that skipped CloudFront gets nothing, not even a CSRF cookie. `/actuator/health/**` is exempt, because the instance checks it on localhost.
+- **Only in AWS.** `OriginVerificationConfig` registers it when `itacatl.origin.verify` is true, which the `aws` profile sets. Without the secret the app does not start, rather than run unprotected; a blank one is refused.
+- **The secret** is generated by Terraform (`random_password` in the `backend` module), stored as an SSM SecureString and read by the app at start through Spring Cloud AWS Parameter Store. CloudFront gets it as a custom origin header, and replaces any header of the same name that a viewer sends ([backend](../infra/modules/backend/README.md), [frontend](../infra/modules/frontend/README.md) modules, [aws profile](aws-profile.md)).
+
+What it does not do is encrypt the hop. TLS to the instance needs a certificate from a public authority for a name CloudFront connects to, which the instance's AWS address cannot get; the options and why this one was chosen are in [ADR 0006](adr/0006-origin-secret-header.md).
+
 ## Decisions and trade-offs
 
 | Decision | Instead of | Why |
@@ -267,16 +301,20 @@ A page on another origin cannot read the cookie (same-origin policy), so it cann
 
 ## Known limitations
 
-- **No sign-in rate limiting yet**, so passwords can be guessed at the speed bcrypt allows. Where to add it (CloudFront or Spring) is an open decision in the [infra plan](infra-plan.md#open-decisions).
+- **The per-email bucket can lock an owner out for up to 15 minutes**: anyone who knows the email can spend its attempts. The usual trade-off of per-account limits, accepted for a short window.
+- **Only sign-in is rate-limited.** Other public endpoints are read-only and cheap; a general limit would go to the edge.
+- **The hop from CloudFront to the instance is not encrypted** ([ADR 0006](adr/0006-origin-secret-header.md)).
 - **Disabling an account does not end its open sessions**; they last until they expire. Signing the user out everywhere (above) would close the gap.
 - **Accounts only come from the seed.** Registration, staff invitations and password resets are not built.
-- **The CSRF cookie's `Secure` flag** follows the request, which is plain HTTP behind CloudFront. Unlike the session cookie, it does not grant access on its own.
 
 ## Tests
 
 | Test | What it proves |
 |---|---|
 | `AuthControllerIntegrationTest` | The whole flow over HTTP with the real filters, CSRF and sessions in PostgreSQL: sign-in like a browser, cookie flags, wrong password and unknown email give the same error, CSRF is required, sign-out ends the session, the marketplace stays public |
+| `SignInRateLimiterTest` | Each bucket limits on its own, an email's case and spaces share a bucket, attempts come back over the window, and only a trusted `X-Forwarded-For`'s last entry is the client |
+| `SignInRateLimitIntegrationTest` | Over HTTP, an attempt over the limit gets `429 TOO_MANY_ATTEMPTS` with `Retry-After` |
+| `OriginVerificationFilterTest` | Only the right secret goes through, health checks need none, a blank secret is refused |
 | `SecureCookiesIntegrationTest` | With the `aws` profile's setting, the session and CSRF cookies are `Secure` even though the request is plain HTTP, as CloudFront's are |
 | `AccountRepositoryIntegrationTest` | A user's businesses in one query, lowercase emails, one membership per user and business |
 | `BusinessAccessIntegrationTest` | Owners manage and view, staff only view, nobody reaches another business, anonymous gets nothing |
