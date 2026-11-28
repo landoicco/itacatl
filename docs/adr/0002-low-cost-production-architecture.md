@@ -15,7 +15,7 @@ The target customers are small businesses that cannot pay much for software. One
 - **Network:** the instance in a public subnet, reachable only from the CloudFront prefix list; RDS in private subnets. No NAT gateway (~$33/month).
 - **Notifications:** SQS with a dead-letter queue and a Lambda that calls the WhatsApp API. Reservations stay synchronous, because they must check limited stock before confirming.
 
-Estimated at ~$25–27/month if left running, under a hard ceiling of $30 (see [infra-plan.md](../infra-plan.md#cost-rules)).
+Estimated at ~$24–25/month if left running, under a hard ceiling of $30 (see [infra-plan.md](../infra-plan.md#cost-rules)).
 
 ## Consequences
 

@@ -47,3 +47,8 @@ output "url" {
   description = "Address the marketplace is served on."
   value       = module.frontend.url
 }
+
+output "dashboard_name" {
+  description = "CloudWatch dashboard with every alarm's metric."
+  value       = module.observability.dashboard_name
+}

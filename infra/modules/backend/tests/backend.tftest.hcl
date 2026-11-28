@@ -146,9 +146,27 @@ run "each_permission_names_its_resource" {
   assert {
     condition = alltrue([
       for statement in jsondecode(aws_iam_role_policy.this.policy).Statement :
-      statement.Resource != "*" if statement.Sid != "EcrSignIn"
+      statement.Resource != "*" if !contains(["EcrSignIn", "PublishMemoryAndDisk"], statement.Sid)
     ])
-    error_message = "Only ECR's sign-in may apply to every resource."
+    error_message = "Only ECR's sign-in and publishing metrics, which take no resource, may apply to every resource."
+  }
+
+  # PutMetricData takes no resource, so the namespace is what narrows it.
+  assert {
+    condition = anytrue([
+      for statement in jsondecode(aws_iam_role_policy.this.policy).Statement :
+      statement.Action == "cloudwatch:PutMetricData" && try(statement.Condition.StringEquals["cloudwatch:namespace"] == "itacatl-test/backend", false)
+    ])
+    error_message = "The instance must publish metrics only to its own namespace."
+  }
+
+  assert {
+    condition = anytrue([
+      for statement in jsondecode(aws_iam_role_policy.this.policy).Statement :
+      try(toset(statement.Action) == toset(["autoscaling:CompleteLifecycleAction", "autoscaling:SetInstanceHealth"]), false) &&
+      try(endswith(statement.Resource, ":autoScalingGroupName/${aws_autoscaling_group.this.name}"), false)
+    ])
+    error_message = "The instance must report its readiness and a hung app to its own group only."
   }
 
   assert {
@@ -183,6 +201,31 @@ run "the_instance_runs_the_app_with_the_aws_profile" {
       ] : strcontains(base64decode(aws_launch_template.this.user_data), expected)
     ])
     error_message = "The user data must run the image with the aws profile and the database's details, take the Elastic IP, and report to this group's launch hook."
+  }
+}
+
+# Applied against the mock, because the user data names resources that are unknown in a plan.
+run "the_instance_reports_what_ec2_does_not" {
+  command = apply
+
+  assert {
+    condition = alltrue([
+      for expected in [
+        "\"namespace\": \"itacatl-test/backend\"",
+        "\"omit_hostname\": true",
+        "mem_used_percent",
+        "\"aggregation_dimensions\": [[\"path\"]]",
+        "set-instance-health",
+        "/actuator/health/liveness",
+        "systemctl enable --now backend-watchdog.timer",
+      ] : strcontains(base64decode(aws_launch_template.this.user_data), expected)
+    ])
+    error_message = "The user data must start the CloudWatch agent on the module's namespace, with no host dimension, and the watchdog that reports a hung app."
+  }
+
+  assert {
+    condition     = contains(aws_autoscaling_group.this.enabled_metrics, "GroupInServiceInstances")
+    error_message = "The group must publish its instances in service, which the observability module alarms on."
   }
 }
 

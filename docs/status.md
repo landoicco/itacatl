@@ -5,13 +5,14 @@ Where the work stands, what comes next, and what is still undecided. It is the e
 ## Now
 
 - **Released:** [v0.2.0](https://github.com/landoicco/itacatl/releases), tenant isolation (slices 1 to 3 of the [rework roadmap](product-spec.md#rework-roadmap)).
-- **Infrastructure:** Phase 1 (bootstrap) of the [infra plan](infra-plan.md#work-phases) is done, and Phase 2 (modules) is under way, one PR per module. Nothing is deployed: the infrastructure is ready but off ([Terraform guide](terraform.md)), and must stay under a hard ceiling of $30/month when running, with the database never cut back to save money ([cost rules](infra-plan.md#cost-rules)).
-- **Latest:** the `frontend` module (a private S3 bucket and one CloudFront distribution for the app and `/api`, the domain an optional deployment setting) and the runbook's frontend deploy. Before it, the `backend` module with the `aws` profile's IAM sign-in to RDS, Trivy in CI, the `database` and `network` modules and the `envs/prod` stack.
+- **Infrastructure:** Phase 1 (bootstrap) of the [infra plan](infra-plan.md#work-phases) is done, and so are Phase 2's modules, one PR each, except `notifications`. Nothing is deployed: the infrastructure is ready but off ([Terraform guide](terraform.md)), and must stay under a hard ceiling of $30/month when running, with the database never cut back to save money ([cost rules](infra-plan.md#cost-rules)).
+- **Latest:** the `observability` module (seven CloudWatch alarms emailed through SNS and one dashboard, all within the free tier), with the CloudWatch agent for memory and disk and a watchdog that has a hung app's instance replaced, both in the `backend` module. Before it, the `frontend` module (S3 and one CloudFront distribution, the domain an optional deployment setting), the `backend` module with the `aws` profile's IAM sign-in to RDS, Trivy in CI, the `database` and `network` modules and the `envs/prod` stack.
 - **Goal:** the infrastructure is finished when it is [deploy-ready](infra-plan.md#definition-of-done), with nothing created in AWS until the maintainer decides to launch.
-- **Next:** the rest of Phase 2, then Phase 3:
-  1. `observability`: alarms and dashboard, the runbook's remaining steps, and whether VPC flow logs, database monitoring and CloudFront logs are worth their cost ([accepted Trivy findings](terraform.md#accepted-trivy-findings)).
+- **Next**, in this order:
+  1. The [open decisions](#open-decisions): encrypting CloudFront's hop to the backend, and rate limiting.
   2. Phase 3: Infracost and the arm64 image build in CI.
-  3. `notifications` waits until slices 5 and 6 need it.
+  3. Closing the runbook: the first-apply checks of every module gathered in one place, and the list of account prerequisites created by hand (hosted zone, AWS Budgets, the maintainer's sign-in).
+  4. `notifications` waits until slices 5 and 6 need it.
 
   Slice 4 of the roadmap (cash reservations) comes after, or in between if the maintainer prefers.
 
@@ -38,7 +39,6 @@ Known gaps, each with the work it belongs to.
 | The owner panel's menu list has no upper bound or history ("see past menus") | When menus pile up |
 | Creating a catalog item from the menu editor | Owner panel polish |
 | Sign-in rate limiting ([security](security.md#known-limitations)) | Depends on an infra open decision |
-| Once in service, the backend's instance is watched only by EC2's status checks: an app that stops answering later is not replaced ([backend module](../infra/modules/backend/README.md)) | `observability` module, with an alarm |
 | The arm64 image, the one that runs in AWS, is not built in CI | Phase 3 of the [infra plan](infra-plan.md#phase-3-ci) |
 | The slug is resolved more than once per management request ([tenant isolation](tenant-isolation.md#known-limitations)) | Only if it shows up in profiling |
 
@@ -51,3 +51,8 @@ Neither planned nor dropped: they are kept here so later designs don't close the
 - **An optional color per item**, for the UI.
 - **Per-vertical copy** in the locale catalogs ([i18n](i18n.md#known-limitations)).
 - **A flow video in the README**, once more screens exist.
+- **More observability, once real traffic exists**, each within CloudWatch's free ten metrics and ten alarms ([observability module](../infra/modules/observability/README.md)):
+  - A metric filter that counts the app's `ERROR` logs (ECS JSON), with an alarm when they spike: one custom metric.
+  - An alarm on the backend's `CPUSurplusCreditsCharged`, in case a type ignores the standard credit mode.
+  - A few application metrics through Micrometer (JVM heap, HTTP latency, connection pool), filtered to two or three, since each costs about $0.30 a month.
+  - Database Insights in its free Standard mode, if `db.t4g.micro` supports it.

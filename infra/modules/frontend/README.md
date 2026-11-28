@@ -33,7 +33,7 @@ Each is ignored inline, next to the resource, with its reason:
 - `AVD-AWS-0089`, S3 access logging: it needs a second bucket; CloudFront is the bucket's only reader.
 - `AVD-AWS-0090`, S3 versioning: it would keep copies of files that every commit rebuilds.
 - `AVD-AWS-0132`, S3 without a customer-managed key: such a key bills monthly.
-- `AVD-AWS-0010`, CloudFront access logs: they bill for their storage; decided with the observability module.
+- `AVD-AWS-0010`, CloudFront access logs: they bill for their storage, and the [observability](../observability/README.md) module alarms on CloudFront's basic metrics, which have no charge.
 - `AVD-AWS-0011`, CloudFront without WAF: WAF bills monthly; rate limiting is an open decision.
 
 ## First apply

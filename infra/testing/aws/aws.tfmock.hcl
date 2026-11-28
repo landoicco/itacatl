@@ -19,3 +19,7 @@ mock_data "aws_caller_identity" {
 mock_resource "aws_cloudfront_function" {
   defaults = { arn = "arn:aws:cloudfront::111111111111:function/test" }
 }
+
+mock_resource "aws_sns_topic" {
+  defaults = { arn = "arn:aws:sns:us-east-1:111111111111:test" }
+}

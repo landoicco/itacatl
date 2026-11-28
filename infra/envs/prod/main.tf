@@ -39,3 +39,13 @@ module "frontend" {
   backend_origin_port        = module.backend.origin_port
   domain                     = var.domain
 }
+
+module "observability" {
+  source                    = "../../modules/observability"
+  name                      = local.name
+  alarm_email               = var.alarm_email
+  autoscaling_group_name    = module.backend.autoscaling_group_name
+  backend_metrics_namespace = module.backend.metrics_namespace
+  database_identifier       = module.database.identifier
+  distribution_id           = module.frontend.distribution_id
+}

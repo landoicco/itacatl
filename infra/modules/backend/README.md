@@ -7,14 +7,16 @@ The Spring Boot backend on one spot Graviton instance, kept running by an Auto S
 - **In service only when ready.** Without a load balancer, the group would count an instance in service as soon as EC2 says it is running, minutes before the app answers. A launch lifecycle hook holds each new instance pending until its user data reports that the app answers and the address is taken. Only then does capacity rebalancing terminate the old instance, so a replacement takes the traffic only when it can serve it. A failed step, or no report within 15 minutes, abandons the instance, and the group launches another.
 - **Reachable only from CloudFront.** The security group admits CloudFront's origin-facing prefix list on 8080, and nothing else: no SSH, since Session Manager opens a shell through the instance's role. It starts connections only to the database (5432, the module adds the database's ingress rule too) and to HTTPS, where AWS's APIs are; without a NAT gateway or VPC endpoints they are reached over the internet.
 - **No secret on the instance.** The user data passes only names and addresses. The app reads the master user's credentials from Secrets Manager to migrate, and signs in as `itacatl_app` with an IAM token; the role allows `rds-db:connect` for that user only.
-- **Each permission names its resource.** Only ECR's sign-in applies to every resource, as AWS requires. The instance may associate the Elastic IP only with instances that carry its own profile, and report only to its own group's hook.
+- **Each permission names its resource.** Only ECR's sign-in and `cloudwatch:PutMetricData` apply to every resource, as AWS requires; the latter only in the module's own namespace. The instance may associate the Elastic IP only with instances that carry its own profile, and report only to its own group.
+- **A hung app is replaced.** Once in service, the group watches only EC2's status checks, which pass while the app hangs, and Docker restarts the container only when it exits. A systemd timer, installed by the user data right before the instance reports ready, calls `/actuator/health/liveness` every minute; after five failures in a row, which leave room for a restart, it marks the instance `Unhealthy` with `set-instance-health`, and the group replaces it. Liveness leaves the database out (`management.endpoint.health.probes.enabled`), so a database outage does not get a healthy backend replaced; the full `/actuator/health`, database included, still gates going into service. A load balancer's health check would do the same for about $16/month.
+- **Memory and disk.** EC2 does not report them, so the CloudWatch agent publishes `mem_used_percent` and `disk_used_percent` of `/`, once a minute, to the `<name>/backend` namespace, the disk also aggregated by `path` alone so the alarm does not depend on the file system's type: three custom metrics, within CloudWatch's free ten. Without a host dimension, every instance the group launches writes to the same series, so the [observability](../observability/README.md) module's alarms outlive a replacement. The agent starts while the app boots, adding nothing to a deploy's downtime, and it is optional: if it fails to install or start, the instance only logs it and serves anyway. The group also publishes `GroupInServiceInstances`, which has no charge.
 - **Hardened instance:** IMDSv2 only, with a hop limit of 2 because the container is one hop further away; an encrypted root volume; T instances in standard credit mode, which throttles instead of billing CPU above the baseline.
 - **Always the latest AMI.** The launch template names Amazon Linux 2023 for arm64 through its public SSM parameter, which EC2 resolves at each launch, so a replacement boots a patched system and a new AMI is not a Terraform change.
 - **Deploys** push an immutable tag to ECR, write it to the SSM parameter and start an instance refresh, which replaces the instance: a few minutes without the backend, accepted with a single instance. Terraform creates the parameter with `none` and never changes it again; with `none`, an instance goes into service without the app, so the first apply does not keep replacing it. ECR keeps the last ten tagged images, counted apart from untagged ones, which go after a week.
 - **Logs** go from Docker to CloudWatch, one stream per instance, kept 14 days.
 - **Known limitations:**
   - An image that never becomes healthy is abandoned again on every instance, about every ten minutes, until a deploy writes a working tag. Each attempt costs only minutes of spot.
-  - Once in service, only EC2's status checks are watched: an app that stops answering later keeps its instance, and Docker's restart policy is its only recovery. The observability module adds the alarm.
+  - The watchdog cannot tell a hung app from one stopped by hand: a container stopped for more than five minutes, through Session Manager, gets the instance replaced.
 
 ```hcl
 module "backend" {
@@ -51,6 +53,8 @@ A mocked provider cannot check these against AWS; confirm them on the first appl
 - The image pushed with `--provenance=false` is a single manifest, so ECR shows one tagged image per deploy and nothing untagged.
 - The ECR pull works with `ecr:BatchGetImage` and `ecr:GetDownloadUrlForLayer` alone.
 - The app migrates and signs in as `itacatl_app` (its logs in CloudWatch), and the Elastic IP's DNS name answers `/actuator/health` from CloudFront.
+- The `amazon-cloudwatch-agent` package installs from Amazon Linux's repository, and `<name>/backend` shows `mem_used_percent` with no dimension and `disk_used_percent` aggregated by `path=/` alone, the dimensions the alarms expect.
+- `systemctl list-timers backend-watchdog.timer` shows the watchdog. Stopping the container (`docker stop backend`) gets the instance marked `Unhealthy` within about five minutes, and the group replaces it.
 
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
@@ -119,6 +123,7 @@ No modules.
 | autoscaling\_group\_name | Name of the Auto Scaling group, which a deploy starts an instance refresh on. |
 | image\_tag\_parameter\_name | SSM parameter holding the image tag new instances run, which a deploy updates. |
 | log\_group\_name | CloudWatch log group with the backend's output. |
+| metrics\_namespace | CloudWatch namespace of the instance's memory and disk metrics, published by the CloudWatch agent. |
 | origin\_domain\_name | Public DNS name of the backend's Elastic IP, for CloudFront's origin. |
 | origin\_port | Port the backend answers on over HTTP, for CloudFront's origin. |
 | public\_ip | The backend's Elastic IP. |

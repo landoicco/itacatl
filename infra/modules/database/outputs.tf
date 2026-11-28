@@ -37,3 +37,8 @@ output "subnet_ids" {
   description = "Subnets the database can be placed in."
   value       = aws_db_subnet_group.this.subnet_ids
 }
+
+output "identifier" {
+  description = "Identifier of the database instance, the dimension of its CloudWatch metrics."
+  value       = aws_db_instance.this.identifier
+}

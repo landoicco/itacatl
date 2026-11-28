@@ -53,7 +53,7 @@ resource "random_id" "final_snapshot" {
   }
 }
 
-#trivy:ignore:AVD-AWS-0133 Database monitoring is decided with the observability module
+#trivy:ignore:AVD-AWS-0133 CloudWatch's basic RDS metrics are what the alarms need
 resource "aws_db_instance" "this" {
   identifier     = var.name
   engine         = "postgres"

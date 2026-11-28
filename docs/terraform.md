@@ -73,7 +73,7 @@ The `Terraform` job in CI runs these on every pull request, through the flake's 
 | Security scan | `trivy config --exit-code 1 .` | Misconfigurations, of every severity: a public resource, a missing encryption, an open port ([accepted findings](#accepted-trivy-findings)) |
 | Tests | `terraform -chdir=<dir> test` | The properties that must hold, below |
 
-`<dir>` is each stack and each module: `bootstrap`, `modules/network`, `modules/database`, `modules/backend`, `modules/frontend`, `envs/prod`. `init -backend=false` downloads the providers but never touches a backend, so it needs no bucket and no credentials. It writes `.terraform/`, which is git-ignored and only links to the shared plugin cache, and `.terraform.lock.hcl`, which is committed in every directory, modules included, so their tests run against the same provider version as CI.
+`<dir>` is each stack and each module: `bootstrap`, `modules/network`, `modules/database`, `modules/backend`, `modules/frontend`, `modules/observability`, `envs/prod`. `init -backend=false` downloads the providers but never touches a backend, so it needs no bucket and no credentials. It writes `.terraform/`, which is git-ignored and only links to the shared plugin cache, and `.terraform.lock.hcl`, which is committed in every directory, modules included, so their tests run against the same provider version as CI.
 
 ### Tests with a mocked provider
 
@@ -105,9 +105,10 @@ run "plain_http_is_denied" {
 | `bootstrap/tests/state.tftest.hcl` | Bucket named per account, versioned, encrypted, never public, TLS only; old versions expire but the newest are kept; retention must be positive; a project name S3 would reject fails at plan time |
 | `modules/network/tests/network.tftest.hcl` | Public and private subnets in two zones with non-overlapping ranges; each subnet uses its own route table, and only the public one has a route, to the internet gateway; no subnet hands out public IPs; the default security group allows nothing; DNS is on; one zone, more zones than the region has, a VPC smaller than /20, an IPv6 range or one with host bits set is rejected |
 | `modules/database/tests/database.tftest.hcl` | The database is private, single-AZ and only in the subnets it is given; storage encrypted, seven days of backups, deletion protection on, and a destroy leaves a final snapshot with a unique name, also when the protection is lifted; RDS manages the master password and IAM sign-in is on; TLS is required, with a parameter group matching the engine; its security group has no rules; one subnet, or backups turned off, is rejected |
-| `modules/backend/tests/backend.tftest.hcl` | One spot instance, never on-demand, chosen by price and capacity, with capacity rebalancing, of any of the types in any of the subnets; a launch hook holds each new instance until it reports ready, and abandons it otherwise; IMDSv2 with two hops, an encrypted root volume, the latest arm64 AMI resolved at launch, standard CPU credits; only CloudFront reaches it, on 8080; it reaches only the database and HTTPS, and the database admits it; every permission names its resource, `rds-db:connect` only as `itacatl_app`, only the master secret; the user data runs the image with the `aws` profile, takes the Elastic IP and reports to the hook; immutable, scanned images, ten tagged ones kept, never counted with untagged ones; logs kept 14 days; one subnet, one instance type or an x86 type is rejected |
+| `modules/backend/tests/backend.tftest.hcl` | One spot instance, never on-demand, chosen by price and capacity, with capacity rebalancing, of any of the types in any of the subnets; a launch hook holds each new instance until it reports ready, and abandons it otherwise; IMDSv2 with two hops, an encrypted root volume, the latest arm64 AMI resolved at launch, standard CPU credits; only CloudFront reaches it, on 8080; it reaches only the database and HTTPS, and the database admits it; every permission names its resource, `rds-db:connect` only as `itacatl_app`, only the master secret, metrics only to its own namespace, health reports only to its own group; the user data runs the image with the `aws` profile, takes the Elastic IP and reports to the hook, starts the CloudWatch agent with no host dimension and the disk aggregated by path, and the watchdog on liveness; the group publishes its instances in service; immutable, scanned images, ten tagged ones kept, never counted with untagged ones; logs kept 14 days; one subnet, one instance type or an x86 type is rejected |
 | `modules/frontend/tests/frontend.tftest.hcl` | The bucket is named per account, blocks public access, has ACLs off, and is read only by this distribution, over TLS; the app is served from it over HTTPS, read-only, with the routes rewritten to `index.html`, in the cheapest price class; `/api/*` goes to the backend's address on its port, uncached, with every method and the viewer's cookies; without a domain, no certificate or DNS records and CloudFront's own certificate; with one, a DNS-validated certificate, A and AAAA aliases and TLS 1.2 or later; a domain outside `us-east-1`, or a name too long for the bucket, is rejected |
-| `envs/prod/tests/prod.tftest.hcl` | How prod wires the modules: they are named `<project>-prod`; the database sits in the network's private subnets and the backend in its public ones; CloudFront's `/api` origin is the backend's Elastic IP, and prod is served on CloudFront's domain without a domain of its own; a project name S3 would reject fails at plan time |
+| `modules/observability/tests/observability.tftest.hcl` | Within CloudWatch's free tier: ten alarms at most, none high-resolution; an alarm for the backend's group, memory and disk, CloudFront's 5xx rate and the database's CPU, billed surplus CPU and storage; a group that stops reporting counts as empty; every alarm emails the topic when it fires and when it clears; a graph per alarm; an invalid email, or a region other than `us-east-1`, is rejected |
+| `envs/prod/tests/prod.tftest.hcl` | How prod wires the modules: they are named `<project>-prod`; the database sits in the network's private subnets and the backend in its public ones; CloudFront's `/api` origin is the backend's Elastic IP, and prod is served on CloudFront's domain without a domain of its own; every alarm watches this environment's backend, database or distribution; a project name S3 would reject fails at plan time |
 
 Each module tests its own properties; a stack's tests only check how it joins the modules, so a property is asserted once.
 
@@ -119,13 +120,14 @@ Trivy reports every severity, and CI fails on any finding. One that is accepted 
 |---|---|---|
 | `AVD-AWS-0089`, S3 access logging | `bootstrap`, the state bucket | It needs a second bucket; only Terraform, run by the maintainer, reads this one |
 | `AVD-AWS-0132`, S3 without a customer-managed key | `bootstrap`, the state bucket | A key bills $1/month and protects nothing more here: only the account's principals can read the bucket |
-| `AVD-AWS-0178`, VPC without flow logs | `network` | CloudWatch bills each GB they ingest; decided with the observability module |
-| `AVD-AWS-0133`, RDS without Performance Insights | `database` | Database monitoring is decided with the observability module |
+| `AVD-AWS-0178`, VPC without flow logs | `network` | CloudWatch bills each GB they ingest, and at this traffic they show little the security groups do not already prevent |
+| `AVD-AWS-0133`, RDS without Performance Insights | `database` | The basic RDS metrics, which have no charge, are what the alarms need |
 | `AVD-AWS-0033`, ECR without a customer-managed key | `backend` | A key bills monthly; ECR encrypts the images with its own |
 | `AVD-AWS-0017`, a log group without a customer-managed key | `backend` | The same; CloudWatch encrypts the logs with its own |
 | `AVD-AWS-0089`, `AVD-AWS-0090`, `AVD-AWS-0132`: S3 access logging, versioning, a customer-managed key | `frontend`, the build's bucket | CloudFront is its only reader; every file can be rebuilt from its commit; a key bills monthly |
-| `AVD-AWS-0010`, CloudFront access logs | `frontend` | They bill for their storage; decided with the observability module |
+| `AVD-AWS-0010`, CloudFront access logs | `frontend` | They bill for their storage; the alarms use CloudFront's basic metrics, which have no charge |
 | `AVD-AWS-0011`, CloudFront without WAF | `frontend` | WAF bills monthly; rate limiting is an [open decision](infra-plan.md#open-decisions) |
+| `AVD-AWS-0095`, an SNS topic without encryption | `observability`, the alarms' topic | CloudWatch can only publish to a topic encrypted with a customer-managed key, which bills monthly; the alarms carry no secrets |
 | `AVD-AWS-0104`, egress to any address | `backend` | HTTPS to AWS's public endpoints, whose addresses are not fixed; without a NAT gateway or VPC endpoints they are reached over the internet |
 
 Accepting a new one takes a reason that names what it would cost or why it does not apply, and a row here.
@@ -141,7 +143,8 @@ Accepting a new one takes a reason that names what it would cost or why it does 
 | [`network`](../infra/modules/network/README.md) | VPC over two zones; public subnets for the backend, private ones for the database with no route out; no NAT gateway; the default security group emptied |
 | [`database`](../infra/modules/database/README.md) | RDS PostgreSQL 18, single-AZ, in the private subnets; master password in Secrets Manager, IAM sign-in for the application, TLS required; encrypted, backed up, protected from deletion, with a final snapshot; a security group that clients add their rules to |
 | [`frontend`](../infra/modules/frontend/README.md) | A private S3 bucket for the build; one CloudFront distribution for the app and `/api`, with the app's routes rewritten to `index.html` and security headers; with a domain, its ACM certificate and Route 53 aliases |
-| [`backend`](../infra/modules/backend/README.md) | ECR; one spot Graviton instance in an Auto Scaling group, in the public subnets, in service only once the app answers; an Elastic IP as CloudFront's origin; a security group open only to CloudFront, and the database's rule for it; an IAM role with one resource per permission; the image tag in SSM; logs in CloudWatch |
+| [`backend`](../infra/modules/backend/README.md) | ECR; one spot Graviton instance in an Auto Scaling group, in the public subnets, in service only once the app answers; an Elastic IP as CloudFront's origin; a security group open only to CloudFront, and the database's rule for it; an IAM role with one resource per permission; the image tag in SSM; logs in CloudWatch, memory and disk through the CloudWatch agent; a watchdog that has a hung app's instance replaced |
+| [`observability`](../infra/modules/observability/README.md) | Seven CloudWatch alarms (the backend's group, memory and disk; CloudFront's 5xx rate; the database's CPU, billed surplus CPU and storage), emailed through SNS when they fire and when they clear; one dashboard; all within CloudWatch's free tier |
 
 Each module's README ends with what to confirm on the first apply: what a mocked provider cannot check against AWS.
 
@@ -175,19 +178,15 @@ Nothing in AWS is created until this runbook is followed. It runs from the maint
    ```shell
    cd ../envs/prod
    cp ../../bootstrap/backend.hcl backend.hcl
+   cp terraform.tfvars.example terraform.tfvars   # git-ignored; fill it in
    terraform init -backend-config=backend.hcl
    terraform apply
    ```
+   `terraform.tfvars` takes the address the alarms are emailed to, which is required, and, optionally, the business's own domain, whose hosted zone must already exist in Route 53. Without a domain, the marketplace is served on CloudFront's own `*.cloudfront.net` domain.
+
    The database takes about ten minutes, the CloudFront distribution several. The backend's instance boots too, but its image tag is still `none`, so it goes into service without the app until the first deploy; that is expected.
 
-   **With the business's own domain**, whose hosted zone already exists in Route 53, first write it in a `terraform.tfvars` next to `main.tf`, which git ignores:
-   ```hcl
-   domain = {
-     name    = "shop.example.com"
-     zone_id = "Z0123456789ABCDEFGHIJ" # aws route53 list-hosted-zones
-   }
-   ```
-   Without it, the marketplace is served on CloudFront's own `*.cloudfront.net` domain.
+   **Confirm the alarms' email:** AWS sends the address a link, and no alarm arrives until it is followed. An unconfirmed subscription expires after three days; a new `terraform apply` creates it again.
 6. **Deploy the backend**, as in [Deploying the backend](#deploying-the-backend).
 7. **Deploy the frontend**, as in [Deploying the frontend](#deploying-the-frontend).
 8. **Smoke test**, through CloudFront, back in `infra/envs/prod`:
@@ -198,8 +197,12 @@ Nothing in AWS is created until this runbook is followed. It runs from the maint
    curl -fsS "$url/api/businesses" && echo "api ok"
    ```
    Then open `$url` in a browser, open a shop, and sign in to the owner panel: the session and CSRF cookies only work if CloudFront forwards them.
-
-The observability module adds its steps after these.
+9. **Check the alarms**, still in `infra/envs/prod`:
+   ```shell
+   aws cloudwatch describe-alarms --alarm-name-prefix itacatl-prod- \
+     --query 'MetricAlarms[].[AlarmName,StateValue]' --output table
+   ```
+   All of them should be `OK`, or `INSUFFICIENT_DATA` for a metric with no data yet. Then open the `$(terraform output -raw dashboard_name)` dashboard in the CloudWatch console: each graph should have a line.
 
 ### Deploying the backend
 

@@ -42,3 +42,8 @@ output "origin_port" {
   description = "Port the backend answers on over HTTP, for CloudFront's origin."
   value       = local.app_port
 }
+
+output "metrics_namespace" {
+  description = "CloudWatch namespace of the instance's memory and disk metrics, published by the CloudWatch agent."
+  value       = local.metrics_namespace
+}
