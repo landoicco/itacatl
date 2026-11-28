@@ -1,7 +1,8 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { http, HttpResponse } from "msw";
 import { beforeEach, describe, expect, it } from "vitest";
 import { renderRoute } from "@/test/renderRoute";
-import { PASSWORD, signInAs } from "@/test/server";
+import { PASSWORD, server, signInAs } from "@/test/server";
 
 function signIn(email: string, password = PASSWORD) {
   fireEvent.change(screen.getByLabelText("Email"), { target: { value: email } });
@@ -40,6 +41,28 @@ describe("Signing in to the owner panel", () => {
     signIn("ana@example.com", "wrong");
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Email or password is incorrect.");
+  });
+
+  it("asks to wait after too many attempts", async () => {
+    server.use(
+      http.post("/api/auth/login", () =>
+        HttpResponse.json(
+          { status: 429, code: "TOO_MANY_ATTEMPTS" },
+          {
+            status: 429,
+            headers: { "Content-Type": "application/problem+json", "Retry-After": "600" },
+          }
+        )
+      )
+    );
+    renderRoute("/login");
+    await screen.findByRole("heading", { name: "Business sign-in" });
+
+    signIn("ana@example.com");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Too many sign-in attempts. Wait a few minutes and try again."
+    );
   });
 
   it("goes straight into the only business", async () => {

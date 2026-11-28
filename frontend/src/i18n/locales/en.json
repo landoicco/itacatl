@@ -165,6 +165,7 @@
     "MENU_ITEM_NOT_FOUND": "This item is no longer in the menu.",
     "AUTHENTICATION_REQUIRED": "Your session has ended. Sign in again.",
     "INVALID_CREDENTIALS": "Email or password is incorrect.",
+    "TOO_MANY_ATTEMPTS": "Too many sign-in attempts. Wait a few minutes and try again.",
     "CSRF_TOKEN_INVALID": "The page was open for too long. Reload it and try again.",
     "ACCESS_DENIED": "You don't have permission to do this.",
     "VALIDATION_FAILED": "Some fields need your attention.",

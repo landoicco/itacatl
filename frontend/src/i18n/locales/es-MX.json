@@ -165,6 +165,7 @@
     "MENU_ITEM_NOT_FOUND": "Este producto ya no está en el menú.",
     "AUTHENTICATION_REQUIRED": "Tu sesión terminó. Vuelve a entrar.",
     "INVALID_CREDENTIALS": "El correo o la contraseña no son correctos.",
+    "TOO_MANY_ATTEMPTS": "Demasiados intentos de entrar. Espera unos minutos e inténtalo de nuevo.",
     "CSRF_TOKEN_INVALID": "La página estuvo abierta mucho tiempo. Recárgala e inténtalo de nuevo.",
     "ACCESS_DENIED": "No tienes permiso para hacer esto.",
     "VALIDATION_FAILED": "Revisa los campos marcados.",
