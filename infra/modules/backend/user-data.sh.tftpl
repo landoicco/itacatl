@@ -20,17 +20,22 @@ report() {
 # Any failed step abandons the instance at once, instead of waiting for the hook's timeout
 trap 'status=$?; if [ "$status" -ne 0 ]; then report ABANDON || true; fi' EXIT
 
-dnf install -y docker amazon-cloudwatch-agent
+dnf install -y docker
 systemctl enable --now docker
 
 # Memory and disk, which EC2 does not report. Only what the alarms use, since each metric bills
 # beyond CloudWatch's free ten. No host dimension: every instance the group launches writes to the
-# same series, so the alarms outlive a replacement
-cat >/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<'EOF'
+# same series, so the alarms outlive a replacement. The disk is also aggregated by path alone, so
+# its alarm does not depend on the file system's type. Optional: a failure is only logged, so
+# monitoring never keeps the app from serving
+start_agent() {
+  dnf install -y amazon-cloudwatch-agent || return
+  cat >/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<'EOF' || return
 {
   "agent": { "metrics_collection_interval": 60, "omit_hostname": true },
   "metrics": {
     "namespace": "${metrics_namespace}",
+    "aggregation_dimensions": [["path"]],
     "metrics_collected": {
       "mem": { "measurement": ["mem_used_percent"] },
       "disk": { "measurement": ["used_percent"], "resources": ["/"], "drop_device": true }
@@ -38,8 +43,14 @@ cat >/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<'EOF'
   }
 }
 EOF
-amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s \
-  -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+  amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s \
+    -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+}
+# Called as `start_agent || warn_no_agent`, where set -e does not apply, so each step that can
+# fail returns on its own
+warn_no_agent() {
+  echo "The CloudWatch agent did not start; no memory or disk metrics" >&2
+}
 
 # The tag a deploy wrote. "none" until the first deploy: the instance goes into service without
 # the app, so the first apply does not replace it again and again
@@ -47,6 +58,7 @@ tag=$(aws ssm get-parameter --region "$region" --name "${image_tag_parameter}" \
   --query Parameter.Value --output text)
 if [ "$tag" = none ]; then
   echo "No image deployed yet; the first deploy replaces this instance"
+  start_agent || warn_no_agent
   report CONTINUE
   exit 0
 fi
@@ -71,15 +83,19 @@ docker run --detach --name backend --restart unless-stopped \
   --env DB_MASTER_SECRET_ARN="${master_secret_arn}" \
   "${repository_url}:$tag"
 
+# While the app boots, so the agent adds nothing to a deploy's time without the backend
+start_agent || warn_no_agent
+
 # Once in service, the group sees only EC2's status checks, which pass while a hung app does not
 # answer. Docker restarts the container if it exits; for one that hangs, a timer checks the app
 # every minute and, after five failures in a row, which leave room for a restart, reports the
-# instance unhealthy so the group replaces it
+# instance unhealthy so the group replaces it. It checks liveness, which leaves the database out:
+# a database outage is not fixed by replacing the backend
 install_watchdog() {
   cat >/etc/backend-watchdog.env <<EOF
 REGION=$region
 INSTANCE_ID=$instance_id
-HEALTH_URL=http://localhost:${app_port}/actuator/health
+HEALTH_URL=http://localhost:${app_port}/actuator/health/liveness
 EOF
 
   cat >/usr/local/bin/backend-watchdog <<'EOF'
@@ -133,8 +149,10 @@ for _ in $(seq 60); do
   if curl -fsS "http://localhost:${app_port}/actuator/health" >/dev/null; then
     aws ec2 associate-address --region "$region" --allocation-id "${allocation_id}" \
       --instance-id "$instance_id" --allow-reassociation
-    report CONTINUE
+    # Before reporting, so an instance whose watchdog fails to install is abandoned instead of
+    # serving without it
     install_watchdog
+    report CONTINUE
     exit 0
   fi
   sleep 10

@@ -11,10 +11,10 @@ Alarms that email when something in prod breaks, and one dashboard that graphs w
   | `backend-disk` | The root volume is more than 80% full |
   | `cloudfront-5xx` | More than 5% of CloudFront's responses have been server errors for 15 minutes |
   | `database-cpu` | The database's CPU has been above 80% for 15 minutes |
-  | `database-cpu-credits` | The database, a burstable class, has fewer than 30 CPU credits left, after which it is held to its baseline |
+  | `database-cpu-surplus-charged` | The database is billed for CPU above its baseline: RDS runs burstable classes in unlimited mode, and a new instance starts with no credits, so the charge is watched rather than the balance |
   | `database-storage` | The database has less than 2 GB free |
 
-  The thresholds are first guesses, to tune once real traffic shows what normal looks like.
+  The thresholds are first guesses, to tune once real traffic shows what normal looks like. The memory and disk alarms treat no data as missing, so an agent that stopped, or dimensions that do not match what it publishes, show as `INSUFFICIENT_DATA` instead of a silent `OK`.
 - **Email through SNS**, both when an alarm fires and when it clears. AWS emails the address a confirmation link, and nothing arrives until it is followed. The first thousand emails a month are free.
 - **Memory and disk come from the backend**, whose CloudWatch agent publishes them without a host dimension, so the alarms outlive an instance replacement ([backend module](../backend/README.md)). A hung app is replaced by the backend's own watchdog; these alarms only tell the maintainer.
 - **One dashboard**, a graph per alarm with its threshold drawn in.
@@ -23,6 +23,11 @@ Alarms that email when something in prod breaks, and one dashboard that graphs w
   - VPC flow logs and CloudFront access logs, billed per GB ingested or stored.
   - RDS Performance Insights and Enhanced Monitoring; CloudWatch's basic RDS metrics are what the alarms need.
   - Application metrics (JVM, HTTP, connection pool) through Micrometer, dozens of custom metrics at about $0.30 each a month.
+
+- **Known limitations:**
+  - At a small business's traffic, a few 5xx in a quiet period are a large rate: `cloudfront-5xx` may fire for a handful of errors. A guard on the request count (metric math) is the fix if it gets noisy.
+  - `backend-memory` at 90% may sit close to normal: the container may take 1.5 GB of a 2 GB instance. To tune against the first apply's graph.
+  - An alarm also emails when it goes from `INSUFFICIENT_DATA` to `OK`, so each apply that creates the alarms sends a few `OK` emails that clear nothing.
 
 ```hcl
 module "observability" {
@@ -48,7 +53,8 @@ A mocked provider cannot check these against AWS; confirm them on the first appl
 
 - The confirmation email arrives, and once its link is followed the subscription shows as confirmed (`aws sns list-subscriptions-by-topic`).
 - Every alarm starts in `OK` or `INSUFFICIENT_DATA`, not `ALARM`, except `backend-not-in-service` while the group fills.
-- The memory and disk alarms find the agent's metrics: their dimensions match what the agent publishes (the backend module's first-apply checks).
+- The memory and disk alarms leave `INSUFFICIENT_DATA` within a few minutes of the agent starting; staying there means their dimensions do not match what the agent publishes (the backend module's first-apply checks).
+- The memory graph's normal level leaves room under 90%, and `CPUSurplusCreditsCharged` exists for the database's class.
 - The dashboard shows a line in each graph.
 - `aws cloudwatch set-alarm-state --alarm-name itacatl-prod-backend-disk --state-value ALARM --state-reason test` sends an email, and the alarm returns to `OK` on its next evaluation.
 

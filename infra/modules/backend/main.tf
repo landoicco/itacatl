@@ -258,15 +258,10 @@ resource "aws_iam_role_policy" "this" {
         }
       },
       {
-        Sid      = "ReportReadiness"
+        # Readiness to the launch hook, and a hung app from the watchdog
+        Sid      = "ReportToTheGroup"
         Effect   = "Allow"
-        Action   = "autoscaling:CompleteLifecycleAction"
-        Resource = "arn:${local.partition}:autoscaling:${local.region}:${local.account_id}:autoScalingGroup:*:autoScalingGroupName/${local.autoscaling_group_name}"
-      },
-      {
-        Sid      = "ReportAHungApp"
-        Effect   = "Allow"
-        Action   = "autoscaling:SetInstanceHealth"
+        Action   = ["autoscaling:CompleteLifecycleAction", "autoscaling:SetInstanceHealth"]
         Resource = "arn:${local.partition}:autoscaling:${local.region}:${local.account_id}:autoScalingGroup:*:autoScalingGroupName/${local.autoscaling_group_name}"
       },
     ]

@@ -1,7 +1,7 @@
 locals {
   # Each alarm watches one metric and emails both when it fires and when it clears. CloudWatch's
   # free tier covers ten alarms and ten custom metrics; this module uses seven alarms and the
-  # backend's two custom metrics. Thresholds are first guesses, tuned once real traffic shows what
+  # backend's three custom metrics. Thresholds are first guesses, tuned once real traffic shows what
   # normal looks like.
   alarms = {
     backend-not-in-service = {
@@ -18,27 +18,29 @@ locals {
       missing_data = "breaching"
     }
     backend-memory = {
-      description  = "The backend instance has used more than 90% of its memory for 15 minutes."
-      namespace    = var.backend_metrics_namespace
-      metric       = "mem_used_percent"
-      dimensions   = {}
-      statistic    = "Maximum"
-      comparison   = "GreaterThanThreshold"
-      threshold    = 90
-      periods      = 3
-      missing_data = "notBreaching"
+      description = "The backend instance has used more than 90% of its memory for 15 minutes."
+      namespace   = var.backend_metrics_namespace
+      metric      = "mem_used_percent"
+      dimensions  = {}
+      statistic   = "Maximum"
+      comparison  = "GreaterThanThreshold"
+      threshold   = 90
+      periods     = 3
+      # No data shows as INSUFFICIENT_DATA, not OK: an agent that stopped, or dimensions that do
+      # not match what it publishes, are seen instead of silencing the alarm.
+      missing_data = "missing"
     }
     backend-disk = {
       description = "The backend instance's root volume is more than 80% full."
       namespace   = var.backend_metrics_namespace
       metric      = "disk_used_percent"
-      # The agent adds the file system's type; Amazon Linux 2023's root is XFS.
-      dimensions   = { path = "/", fstype = "xfs" }
+      # The agent's aggregation by path alone, independent of the file system's type.
+      dimensions   = { path = "/" }
       statistic    = "Maximum"
       comparison   = "GreaterThanThreshold"
       threshold    = 80
       periods      = 1
-      missing_data = "notBreaching"
+      missing_data = "missing"
     }
     cloudfront-5xx = {
       description = "More than 5% of CloudFront's responses have been server errors for 15 minutes."
@@ -63,16 +65,18 @@ locals {
       periods      = 3
       missing_data = "notBreaching"
     }
-    database-cpu-credits = {
-      # A burstable class: once its credits run out, it is held to its baseline CPU.
-      description  = "The database has fewer than 30 CPU credits left."
+    database-cpu-surplus-charged = {
+      # RDS runs burstable classes in unlimited mode: once the credits run out, the CPU above the
+      # baseline is billed instead of throttled. A new instance starts with no credits, so the
+      # balance itself would alarm on every first apply; the charge is what matters.
+      description  = "The database is being billed for CPU above its baseline (unlimited mode)."
       namespace    = "AWS/RDS"
-      metric       = "CPUCreditBalance"
+      metric       = "CPUSurplusCreditsCharged"
       dimensions   = { DBInstanceIdentifier = var.database_identifier }
-      statistic    = "Minimum"
-      comparison   = "LessThanThreshold"
-      threshold    = 30
-      periods      = 3
+      statistic    = "Sum"
+      comparison   = "GreaterThanThreshold"
+      threshold    = 0
+      periods      = 1
       missing_data = "notBreaching"
     }
     database-storage = {

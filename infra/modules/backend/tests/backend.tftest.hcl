@@ -163,9 +163,10 @@ run "each_permission_names_its_resource" {
   assert {
     condition = anytrue([
       for statement in jsondecode(aws_iam_role_policy.this.policy).Statement :
-      statement.Action == "autoscaling:SetInstanceHealth" && try(endswith(statement.Resource, ":autoScalingGroupName/${aws_autoscaling_group.this.name}"), false)
+      try(toset(statement.Action) == toset(["autoscaling:CompleteLifecycleAction", "autoscaling:SetInstanceHealth"]), false) &&
+      try(endswith(statement.Resource, ":autoScalingGroupName/${aws_autoscaling_group.this.name}"), false)
     ])
-    error_message = "The watchdog must be able to report the instance unhealthy to its own group only."
+    error_message = "The instance must report its readiness and a hung app to its own group only."
   }
 
   assert {
@@ -213,7 +214,9 @@ run "the_instance_reports_what_ec2_does_not" {
         "\"namespace\": \"itacatl-test/backend\"",
         "\"omit_hostname\": true",
         "mem_used_percent",
+        "\"aggregation_dimensions\": [[\"path\"]]",
         "set-instance-health",
+        "/actuator/health/liveness",
         "systemctl enable --now backend-watchdog.timer",
       ] : strcontains(base64decode(aws_launch_template.this.user_data), expected)
     ])
