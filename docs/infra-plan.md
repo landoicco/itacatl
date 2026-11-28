@@ -38,7 +38,7 @@ flowchart LR
 - **Deploys:** the image tag lives in SSM Parameter Store; a deploy updates it and starts an ASG instance refresh. With a single instance this means a few minutes of downtime, accepted and documented.
 - **Configuration:** SSM Parameter Store (SecureString for secrets other than the database password).
 - **Access:** SSM Session Manager, no SSH.
-- **Observability:** CloudWatch Logs with short retention, alarms (instance health, RDS storage and CPU, DLQ depth, CloudFront 5xx) and one dashboard.
+- **Observability:** CloudWatch Logs with short retention; the CloudWatch agent for the instance's memory and disk; alarms emailed through SNS (no backend in service, memory, disk, CloudFront 5xx, RDS CPU, credits and storage; DLQ depth with `notifications`) and one dashboard, all within the free tier.
 
 ### Inside the VPC
 
@@ -96,8 +96,8 @@ Approximate prices in `us-east-1` (spot for EC2, on-demand for the rest), before
 | RDS `db.t4g.micro` single-AZ + 20 GB | ~14 |
 | Secrets Manager (database master password) | ~0.40 |
 | S3, CloudFront, ECR, SQS, Lambda | ~1 |
-| CloudWatch | ~1–3 |
-| **Total** | **~25–27** |
+| CloudWatch (alarms, custom metrics and the dashboard within the free tier; logs beyond 5 GB) | ~0–1 |
+| **Total** | **~24–25** |
 
 WhatsApp messages are billed by Meta per conversation and are capped by the limits in the product spec.
 
@@ -176,9 +176,9 @@ One PR per module, in this order; each joins `envs/prod` in the same PR, so the 
 - [x] `database` module, and the runbook's destroy steps
 - [x] `backend` module; add `trivy` to `flake.nix`, now that there are resources worth scanning
 - [x] `frontend` module, with the domain as an optional deployment setting
-- [ ] `observability` module
+- [x] `observability` module, with the CloudWatch agent and a watchdog in the `backend` module
 - [x] The application's `aws` profile: database access through IAM, the master secret from Secrets Manager ([guide](aws-profile.md)). The app reads nothing from SSM yet: the image tag there is read by the instance's user data, and SecureString parameters join when the app needs a secret other than the database's
-- [ ] The runbook's remaining steps: the observability module's, and gathering the first-apply checks (applying `envs/prod`, both deploys, the smoke test and the destroy are written)
+- [ ] The runbook's last step: gathering the first-apply checks of every module and the list of account prerequisites (applying `envs/prod`, both deploys, the smoke test, the alarms and the destroy are written)
 - [ ] `notifications` module, postponed until slices 5 and 6 need it
 
 **Done when:** each module PR meets the [definition of done](#each-module-pr).
