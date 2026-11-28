@@ -10,6 +10,9 @@ locals {
   autoscaling_group_name = "${var.name}-backend"
   lifecycle_hook_name    = "app-ready"
 
+  # Where the CloudWatch agent publishes the instance's memory and disk, which EC2 does not report.
+  metrics_namespace = "${var.name}/backend"
+
   account_id = data.aws_caller_identity.current.account_id
   partition  = data.aws_partition.current.partition
   region     = data.aws_region.current.region
@@ -246,9 +249,24 @@ resource "aws_iam_role_policy" "this" {
         }
       },
       {
+        Sid      = "PublishMemoryAndDisk"
+        Effect   = "Allow"
+        Action   = "cloudwatch:PutMetricData"
+        Resource = "*"
+        Condition = {
+          StringEquals = { "cloudwatch:namespace" = local.metrics_namespace }
+        }
+      },
+      {
         Sid      = "ReportReadiness"
         Effect   = "Allow"
         Action   = "autoscaling:CompleteLifecycleAction"
+        Resource = "arn:${local.partition}:autoscaling:${local.region}:${local.account_id}:autoScalingGroup:*:autoScalingGroupName/${local.autoscaling_group_name}"
+      },
+      {
+        Sid      = "ReportAHungApp"
+        Effect   = "Allow"
+        Action   = "autoscaling:SetInstanceHealth"
         Resource = "arn:${local.partition}:autoscaling:${local.region}:${local.account_id}:autoScalingGroup:*:autoScalingGroupName/${local.autoscaling_group_name}"
       },
     ]
@@ -315,6 +333,7 @@ resource "aws_launch_template" "this" {
     allocation_id       = aws_eip.this.allocation_id
     autoscaling_group   = local.autoscaling_group_name
     lifecycle_hook      = local.lifecycle_hook_name
+    metrics_namespace   = local.metrics_namespace
     app_port            = local.app_port
     database_host       = var.database_address
     database_name       = var.database_name
@@ -340,10 +359,16 @@ resource "aws_autoscaling_group" "this" {
   max_size            = 1
   desired_capacity    = 1
   vpc_zone_identifier = var.subnet_ids
-  # No load balancer: once in service, the group replaces instances that fail EC2's status checks.
+  # No load balancer: once in service, the group replaces instances that fail EC2's status checks,
+  # and those whose watchdog (user data) reports that the app stopped answering.
   health_check_type = "EC2"
   # On AWS's rebalance recommendation, launch the replacement before the two-minute notice.
   capacity_rebalance = true
+
+  # For the observability module's alarm on a group with nothing in service. Group metrics have no
+  # charge.
+  enabled_metrics     = ["GroupInServiceInstances"]
+  metrics_granularity = "1Minute"
 
   # A new instance stays pending until its user data reports the app answering and the address
   # taken; only then is it in service, and only then does rebalancing terminate the old one.
